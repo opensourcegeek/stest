@@ -1,9 +1,9 @@
-
 extern crate hyper;
 extern crate xml;
 
 use std::io::Read;
 use std::collections::HashMap;
+use std::{thread, time};
 
 use hyper::client::Client;
 use hyper::client::response::Response;
@@ -12,7 +12,9 @@ use hyper::header::{Headers, UserAgent, Header, ContentLength};
 use xml::reader::{EventReader, XmlEvent};
 use xml::attribute::OwnedAttribute;
 
-const MAX_NUM_RETRIES: u64 = 10;
+const MAX_NUM_RETRIES: u64      = 10;
+const ONE_SEC_IN_MILLIS: u64    = 1000;
+
 
 #[derive(Debug)]
 struct TestServerConfig {
@@ -27,13 +29,6 @@ struct TestServerConfig {
     pub host: String
 }
 
-#[derive(Debug)]
-struct FullClientConfig {
-    pub client_config: ClientConfig,
-//    pub server_config: ServerConfig,
-//    pub upload_config: UploadConfig,
-//    pub download_config: DownloadConfig
-}
 
 #[derive(Debug)]
 struct ClientConfig {
@@ -73,17 +68,6 @@ struct UploadConfig {
     pub threadsperurl: u64
 }
 
-//fn do_http_get(url: String) -> Result<Response> {
-//    let client = Client::new();
-//    client.set_redirect_policy(RedirectPolicy::FollowAll);
-//    let mut headers = Headers::new();
-//    headers.set(UserAgent("Python-urllib/1.17".to_owned()));
-//
-//    let mut response = client.get(url)
-//                        .headers(headers)
-//                        .send();
-//    response
-//}
 
 fn get_config_map() -> HashMap<String, Vec<OwnedAttribute>> {
     let url = "http://www.speedtest.net/speedtest-config.php";
@@ -97,10 +81,7 @@ fn get_config_map() -> HashMap<String, Vec<OwnedAttribute>> {
                         .send();
 
     let mut full_config: HashMap<String, Vec<OwnedAttribute>> = HashMap::new();
-    let mut full_client_config: FullClientConfig;
-    let mut client_config: ClientConfig;
-
-
+//    let mut client_config: ClientConfig;
 //    println!("{:?}", response);
 
     match response {
@@ -170,7 +151,6 @@ fn get_config_map() -> HashMap<String, Vec<OwnedAttribute>> {
 //                                    ispulavg: ispulavg
 //                                };
 
-
                             } else if name.to_string() == "server-config".to_string() {
                                 full_config.insert(name.to_string(), attributes);
 
@@ -206,9 +186,9 @@ fn get_config_map() -> HashMap<String, Vec<OwnedAttribute>> {
 
 fn get_all_test_servers() -> Vec<TestServerConfig> {
     let urls = vec![
-        "www.speedtest.net/speedtest-servers-static.php",
+        "http://www.speedtest.net/speedtest-servers-static.php",
         "http://c.speedtest.net/speedtest-servers-static.php",
-        "www.speedtest.net/speedtest-servers.php",
+        "http://www.speedtest.net/speedtest-servers.php",
         "http://c.speedtest.net/speedtest-servers.php"
     ];
 
@@ -328,22 +308,100 @@ fn get_all_test_servers() -> Vec<TestServerConfig> {
 }
 
 
-//fn pick_closest_servers() {
-//
-//}
+fn calc_distance_in_km((lat1, lon1): (f32, f32), (lat2, lon2): (f32, f32)) -> f32 {
+    let radius_in_km = 6371.0;
+    let dlat = (lat2 - lat1).to_radians();
+    let dlon = (lon2 - lon1).to_radians();
+    let a = (dlat / 2.0).sin() * (dlat / 2.0).sin() +
+         (lat1.to_radians()).cos() *
+         (lat2.to_radians()).cos() *
+         (dlon / 2.0).sin() * (dlon / 2.0).sin();
+    let c = 2.0 * a.sqrt().atan2((1.0 - a).sqrt());
+    (radius_in_km * c) as f32
+}
+
+
+fn pick_closest_servers(client_location: (Option<f32>, Option<f32>),
+                        ref all_test_servers: &Vec<TestServerConfig>)
+    -> () {
+
+    for server in *all_test_servers {
+        let client_lat = client_location.0.unwrap();
+        let client_lon = client_location.1.unwrap();
+        let dist = calc_distance_in_km((client_lat, client_lon), (server.latitude, server.longitude));
+        println!("distance {}", dist);
+    }
+
+}
+
+
+fn find_ignore_ids(ref client_conf: &Vec<OwnedAttribute>) -> Vec<u64> {
+    let mut ignored_ids: Vec<u64> = Vec::new();
+
+    for attrib in *client_conf {
+        if attrib.name.to_string() == "ignoreids".to_string() {
+            let ids_str: String = attrib.value.to_string();
+            ignored_ids = ids_str.split(",").map(|x| {
+                x.parse::<u64>().unwrap()
+            }).collect();
+            break;
+        }
+    }
+    ignored_ids
+}
+
+
+fn get_client_location(ref client_conf: &Vec<OwnedAttribute>) -> (Option<f32>, Option<f32>) {
+    let mut latitude: Option<f32> = Option::None;
+    let mut longitude: Option<f32> = Option::None;
+    for attrib in  *client_conf {
+        if attrib.name.to_string() == "lat".to_string() {
+            latitude = Option::Some(attrib.value.parse::<f32>().unwrap());
+
+        } else if attrib.name.to_string() == "lon".to_string() {
+            longitude = Option::Some(attrib.value.parse::<f32>().unwrap());
+        }
+    }
+    (latitude, longitude)
+}
 
 
 fn main() {
-    // if we don't get data back use some looping mechanism to retry upto 5 times before
-    // giving up??
-    let config = get_config_map();
-    println!("{:?}", config);
+    // The speed test config file request returns nothing sometimes, but it looks like a
+    // glitch on the server side as similar content-length:0 responses come back when queried
+    // using curl as well. To work around it we retry upto MAX_NUM_RETRIES, it should come in
+    // via passed in args as well.
+    // TODO: Pass in MAX_NUM_RETRIES from command line
+    let mut got_config = false;
+    let current_count = 0;
+    let mut config = get_config_map();
+    while !config.contains_key("client") && current_count <= MAX_NUM_RETRIES {
+        config = get_config_map();
+        thread::sleep(time::Duration::from_millis(ONE_SEC_IN_MILLIS));
+    }
+//    println!("{:?}", config);
+    // TODO: Add a check to exit if we cannot retrieve any config
 
-    let test_servers = get_all_test_servers();
+    let mut test_servers = get_all_test_servers();
     println!("Total servers available: {:?}", test_servers.len());
 
-    // look for closest servers
+    let server_hint_config = config.get("server-config").unwrap();
+    let ignore_ids = find_ignore_ids(&server_hint_config);
+    println!("Ignored ids: {:?}", ignore_ids);
 
+    // ignore servers on ignore list
+    // TODO: Pass in argument to switch off ignore servers recommended by speedtest config?
+    test_servers.retain(|ref mut server| {
+        // If not ignore ids list keep this server
+        !ignore_ids.contains(&server.id)
+    });
+
+    println!("Total servers available after ignoring: {:?}", test_servers.len());
+
+    // look for closest servers - we should add a switch to avoid this distance check
+    let client_conf = config.get("client").unwrap();
+    let client_location = get_client_location(&client_conf);
+    let closest = pick_closest_servers(client_location, &test_servers);
 
     // look for ping latency for all servers (or closest servers)
 
