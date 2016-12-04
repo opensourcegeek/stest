@@ -14,6 +14,7 @@ use std::io;
 use hyper::client::Client;
 use hyper::client::response::Response;
 use hyper::client::RedirectPolicy;
+use hyper::client::Body;
 use hyper::header::{Headers, UserAgent, Header, ContentLength};
 use xml::reader::{EventReader, XmlEvent};
 use xml::attribute::OwnedAttribute;
@@ -171,7 +172,7 @@ fn get_config_map() -> HashMap<String, Vec<OwnedAttribute>> {
                             }
                         }
                         Err(e) => {
-                            println!("Error parsing configuration XML");
+//                            println!("Error parsing configuration XML");
                         }
                         _ => {}
                     }
@@ -180,11 +181,11 @@ fn get_config_map() -> HashMap<String, Vec<OwnedAttribute>> {
 
             } else {
 
-                println!("Cannot retrieve config data from server");
+//                println!("Cannot retrieve config data from server");
             }
         },
         Err(e)      => {
-            println!("Error fetching config file - please try again");
+//            println!("Error fetching config file - please try again");
         }
 
     }
@@ -444,8 +445,6 @@ fn find_best_server_by_ping(test_servers: &Vec<TestServerConfig>)
                         total = total + 360000 as u64;
                     }
 
-
-
                 },
                 Err(e)      => {
 //                    println!("Failed to get response on ping");
@@ -529,16 +528,73 @@ fn perform_download_test(server_url_str: &str, sizes: &Vec<u64>, dimensions: &Ve
 
     let elapsed = start.elapsed();
     let elapsed_as_millis = (elapsed.as_secs() * 1_000) + (elapsed.subsec_nanos() / 1_000_000) as u64;
-    println!("Total Download bytes {} and total time taken in millis {}",
+    println!("Downloaded {} bytes in {}ms",
              total_download_bytes,
              elapsed_as_millis);
     let speed = (total_download_bytes as f64 * 8.0) / (elapsed_as_millis as f64 / 1000.0);
     let speed_in_mbps = speed / (1000.0 * 1000.0);
-    println!("Download speed {} Mbps", speed_in_mbps);
+    println!("Download speed: {} Mbps", speed_in_mbps);
     (total_download_bytes, elapsed_as_millis)
 }
 
+
+fn perform_upload_test(server_url_str: &str, sizes: &Vec<u64>) -> (u64, u64) {
+    let mut thread_handles = vec![];
+    let start = time::Instant::now();
+
+    for s in sizes {
+        let full_size = s.clone();
+        let upload_url = server_url_str.to_string();
+        let handle = thread::spawn(move || {
+            let mut buff: Vec<u8> = vec![0; full_size as usize];
+            let mut client = Client::new();
+            client.set_redirect_policy(RedirectPolicy::FollowAll);
+
+            let mut headers = Headers::new();
+            headers.set(UserAgent("Hyper-speedtest".to_owned()));
+            let mut response = client.post(upload_url.as_str())
+                                .body(Body::BufBody(&buff, full_size as usize))
+                                .headers(headers)
+                                .send();
+
+            match response {
+                Ok(res)     => {
+//                    println!("{:?}", res);
+                    print!(".");
+                    io::stdout().flush().ok().expect("");
+                    full_size
+                },
+                Err(e)       => {
+                    print!(".");
+                    io::stdout().flush().ok().expect("");
+//                    println!("{:?}", e);
+                    0
+                }
+            }
+        });
+        thread_handles.push(handle);
+    }
+
+    let mut total_upload_bytes = 0;
+    for h in thread_handles {
+        let uploaded = h.join();
+        total_upload_bytes = total_upload_bytes + uploaded.unwrap_or(0);
+    }
+    print!("Done\n");
+    io::stdout().flush().ok().expect("");
+    let elapsed = start.elapsed();
+    let elapsed_as_millis = (elapsed.as_secs() * 1_000) + (elapsed.subsec_nanos() / 1_000_000) as u64;
+    println!("Uploaded {} bytes in {}ms", total_upload_bytes, elapsed_as_millis);
+    let speed = (total_upload_bytes as f64 * 8.0) / (elapsed_as_millis as f64 / 1000.0);
+    let speed_in_mbps = speed / (1000.0 * 1000.0);
+    println!("Upload speed: {} Mbps", speed_in_mbps);
+    (total_upload_bytes, elapsed_as_millis)
+
+}
+
+
 fn main() {
+    println!("");
     // The speed test config file request returns nothing sometimes, but it looks like a
     // glitch on the server side as similar content-length:0 responses come back when queried
     // using curl as well. To work around it we retry upto MAX_NUM_RETRIES, it should come in
@@ -569,6 +625,7 @@ fn main() {
     });
 
     println!("Total servers available after ignoring: {:?}", test_servers.len());
+    println!("");
 
     // look for closest servers - we should add a switch to avoid this distance check
     let client_conf = config.get("client").unwrap();
@@ -589,8 +646,10 @@ fn main() {
     // run in separate threads
     print!("Running download tests...");
     perform_download_test(server_url_str, &sizes, &dimensions);
+    println!("");
 
-
+    print!("Running upload tests...");
+    perform_upload_test(best_server.url.as_str(), &sizes);
     // run a HTTP server in probably main thread and do the rest in separate thread.
 
 }
