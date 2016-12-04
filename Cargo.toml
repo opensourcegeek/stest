@@ -3,6 +3,16 @@ name = "stest"
 version = "0.1.0"
 authors = ["opensourcegeek <praveen.kumar@nomadrail.com>"]
 
+[features]
+ssl = ["hyper/ssl"]
+
 [dependencies]
-hyper = "0.9.13"
 xml-rs = "0.3"
+chrono = "0.2"
+
+[dependencies.url]
+git = "https://github.com/servo/rust-url"
+
+[dependencies.hyper]
+version = "0.9"
+default-features = false

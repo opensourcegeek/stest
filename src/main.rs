@@ -1,9 +1,13 @@
 extern crate hyper;
 extern crate xml;
+extern crate url;
+extern crate chrono;
 
 use std::io::Read;
-use std::collections::HashMap;
-use std::{thread, time};
+use std::collections::{HashMap, BTreeMap};
+use std::thread;
+use std::time;
+use std::time::Instant;
 
 use hyper::client::Client;
 use hyper::client::response::Response;
@@ -11,6 +15,7 @@ use hyper::client::RedirectPolicy;
 use hyper::header::{Headers, UserAgent, Header, ContentLength};
 use xml::reader::{EventReader, XmlEvent};
 use xml::attribute::OwnedAttribute;
+use url::{Url, Host};
 
 const MAX_NUM_RETRIES: u64      = 10;
 const ONE_SEC_IN_MILLIS: u64    = 1000;
@@ -74,7 +79,7 @@ fn get_config_map() -> HashMap<String, Vec<OwnedAttribute>> {
     let mut client = Client::new();
     client.set_redirect_policy(RedirectPolicy::FollowAll);
     let mut headers = Headers::new();
-    headers.set(UserAgent("Python-urllib/1.17".to_owned()));
+    headers.set(UserAgent("Hyper-speedtest".to_owned()));
 
     let mut response = client.get(url)
                         .headers(headers)
@@ -87,10 +92,12 @@ fn get_config_map() -> HashMap<String, Vec<OwnedAttribute>> {
     match response {
         Ok(res)    => {
             let all_headers_wrapped = &res.headers.to_owned();
-            let content_length: &ContentLength = all_headers_wrapped.get().unwrap();
+            let default_content_len = ContentLength(0);
+            let content_length: &ContentLength = all_headers_wrapped.get().unwrap_or(&default_content_len);
 //            println!("{:?}", content_length);
             let no_content_length: u64 = 0;
             if res.status == hyper::Ok && content_length.0 > no_content_length {
+
                 let parser = EventReader::new(res);
 
                 for e in parser {
@@ -199,7 +206,7 @@ fn get_all_test_servers() -> Vec<TestServerConfig> {
         client.set_redirect_policy(RedirectPolicy::FollowAll);
 
         let mut headers = Headers::new();
-        headers.set(UserAgent("curl/7.40.0".to_owned()));
+        headers.set(UserAgent("Hyper-speedtest".to_owned()));
         let mut response = client.get(url)
                                 .headers(headers)
                                 .send();
@@ -322,14 +329,44 @@ fn calc_distance_in_km((lat1, lon1): (f32, f32), (lat2, lon2): (f32, f32)) -> f3
 
 
 fn pick_closest_servers(client_location: (Option<f32>, Option<f32>),
-                        ref all_test_servers: &Vec<TestServerConfig>)
+                        all_test_servers: &Vec<TestServerConfig>,
+                        result: &mut Vec<TestServerConfig>)
     -> () {
+    // NB: It is important to maintain resul type to be Vec<TestServerConfig> as if
+    //     user switches this picking closest servers off, you can still just pass
+    //     on servers without having to manipulate types!
 
-    for server in *all_test_servers {
+    // if we have 2 servers with exact same distance - we are just ignoring the first one.
+    // btreemap sorts keys so no extra sorting required
+    let mut distance_map: BTreeMap<u64, &TestServerConfig> = BTreeMap::new();
+
+    for server in all_test_servers {
         let client_lat = client_location.0.unwrap();
         let client_lon = client_location.1.unwrap();
         let dist = calc_distance_in_km((client_lat, client_lon), (server.latitude, server.longitude));
         println!("distance {}", dist);
+        distance_map.insert(dist.round() as u64, server);
+    }
+
+    let max_servers = 10;
+    let mut count = 0;
+
+    for (_, v) in distance_map.iter() {
+        count = count + 1;
+        result.push(TestServerConfig {
+            url: v.url.clone(),
+            latitude: v.latitude.clone(),
+            longitude: v.longitude.clone(),
+            name: v.name.clone(),
+            country: v.country.clone(),
+            country_code: v.country_code.clone(),
+            id: v.id.clone(),
+            url2: v.url2.clone(),
+            host: v.host.clone()
+        });
+        if count >= max_servers {
+            break;
+        }
     }
 
 }
@@ -363,6 +400,66 @@ fn get_client_location(ref client_conf: &Vec<OwnedAttribute>) -> (Option<f32>, O
         }
     }
     (latitude, longitude)
+}
+
+
+fn find_best_server_by_ping(test_servers: &Vec<TestServerConfig>)
+    -> &TestServerConfig {
+    let mut server_responses: BTreeMap<u64, &TestServerConfig> = BTreeMap::new();
+
+    for s in test_servers {
+        let server_url = Url::parse(s.url.as_str()).unwrap();
+        let server_url_str = server_url.host_str().unwrap();
+        println!("{}", server_url_str);
+        let latency_url = format!("http://{}/speedtest/latency.txt", server_url_str);
+        let latency_url_str = latency_url.as_str();
+        println!("{}", latency_url_str);
+
+        let mut total: u64 = 0;
+
+        for i in 0..3 {
+            let start = Instant::now();
+            let mut client = Client::new();
+            client.set_redirect_policy(RedirectPolicy::FollowAll);
+            let mut headers = Headers::new();
+            headers.set(UserAgent("Hyper-speedtest".to_owned()));
+            let mut response = client.get(latency_url_str)
+                                .headers(headers)
+                                .send();
+
+            match response {
+                Ok(resp)    => {
+//                    println!("{:?}", resp);
+
+                    if resp.status == hyper::Ok {
+                        let elapsed = start.elapsed();
+                        let elapsed_as_millis = (elapsed.as_secs() * 1_000) + (elapsed.subsec_nanos() / 1_000_000) as u64;
+                        println!("Time taken span {:?}", elapsed_as_millis);
+                        total = total + elapsed_as_millis;
+
+                    } else {
+                        // Assuming this server isn't too good - so weighing out
+                        total = total + 360000 as u64;
+                    }
+
+
+
+                },
+                Err(e)      => {
+                    println!("Failed to get response on ping");
+                    // Failure responses are weighed 360000 = 1hr in millis
+                    total = total + 3600000 as u64;
+                }
+            }
+        }
+
+        let latency_avg = total / 3;
+        server_responses.insert(latency_avg, s);
+    }
+
+    let (latency, best_server) = server_responses.iter().next().unwrap();
+    println!("The chosen server {:?} with latency {:?}ms", best_server.name, latency);
+    best_server
 }
 
 
@@ -401,10 +498,12 @@ fn main() {
     // look for closest servers - we should add a switch to avoid this distance check
     let client_conf = config.get("client").unwrap();
     let client_location = get_client_location(&client_conf);
-    let closest = pick_closest_servers(client_location, &test_servers);
+    let mut closest_servers: Vec<TestServerConfig> = Vec::new();
+    pick_closest_servers(client_location, &test_servers, &mut closest_servers);
 
     // look for ping latency for all servers (or closest servers)
-
+    let best_server = find_best_server_by_ping(&closest_servers);
+    
     // with the best server chosen start performing tests. These download/upload tests will
     // run in separate threads
 
