@@ -1,13 +1,15 @@
 extern crate hyper;
 extern crate xml;
 extern crate url;
-extern crate chrono;
+extern crate time as ext_time;
 
 use std::io::Read;
 use std::collections::{HashMap, BTreeMap};
 use std::thread;
 use std::time;
 use std::time::Instant;
+use std::io::prelude::*;
+use std::io;
 
 use hyper::client::Client;
 use hyper::client::response::Response;
@@ -463,6 +465,72 @@ fn find_best_server_by_ping(test_servers: &Vec<TestServerConfig>)
 }
 
 
+fn perform_download_test(server_url_str: &str, sizes: &Vec<u64>, dimensions: &Vec<u64>) -> (u64, u64) {
+    let mut urls: Vec<String> = Vec::new();
+    let mut counter = 0;
+    for size in sizes {
+        for dim in dimensions {
+            let url = format!("http://{}/speedtest/random{}x{}.jpg?x={}.{}", server_url_str,
+                              dim, dim, ext_time::precise_time_s(), counter);
+            counter = counter + 1;
+            urls.push(url);
+        }
+    }
+//    println!("{:?}", urls.len());
+    let mut thread_handles = vec![];
+    let start = time::Instant::now();
+
+    for url in urls {
+        let handle = thread::spawn(move || {
+            let mut client = Client::new();
+            client.set_redirect_policy(RedirectPolicy::FollowAll);
+
+            let mut headers = Headers::new();
+            headers.set(UserAgent("Hyper-speedtest".to_owned()));
+            let mut response = client.get(url.as_str())
+                                .headers(headers)
+                                .send();
+            print!(".");
+            io::stdout().flush().ok().expect("");
+            match response {
+                Ok(mut res)   => {
+                    if res.status == hyper::Ok {
+                        let mut buf: Vec<u8> = vec![0; 10240];
+                        let size = res.read(&mut buf);
+                        return size.unwrap() as u64;
+
+                    } else {
+                        return 0 as u64;
+                    }
+                }
+                Err(res)    => {
+                    return 0 as u64;
+                }
+            }
+
+        });
+        thread_handles.push(handle);
+    }
+
+    let mut total_download_bytes = 0;
+
+    for h in thread_handles {
+        let file_size = h.join();
+        total_download_bytes = total_download_bytes + file_size.unwrap_or(0);
+    }
+    print!("Done\n");
+    io::stdout().flush().ok().expect("");
+
+    let elapsed = start.elapsed();
+    let elapsed_as_millis = (elapsed.as_secs() * 1_000) + (elapsed.subsec_nanos() / 1_000_000) as u64;
+    println!("Total Download bytes {} and total time taken in millis {}",
+             total_download_bytes,
+             elapsed_as_millis);
+    let speed = total_download_bytes as f64 * 8.0 / (elapsed_as_millis as f64 / 1000.0);
+    println!("Download speed {} Mbps", speed / 1000.0 * 1000.0);
+    (total_download_bytes, elapsed_as_millis)
+}
+
 fn main() {
     // The speed test config file request returns nothing sometimes, but it looks like a
     // glitch on the server side as similar content-length:0 responses come back when queried
@@ -503,9 +571,18 @@ fn main() {
 
     // look for ping latency for all servers (or closest servers)
     let best_server = find_best_server_by_ping(&closest_servers);
+    let sizes: Vec<u64> = vec![32768, 65536, 131072, 262144, 524288, 1048576, 7340032];
+    let dimensions: Vec<u64> = vec![350, 500, 750, 1000, 1500, 2000, 2500,
+                         3000, 3500, 4000];
+
+    let server_url = Url::parse(best_server.url.as_str()).unwrap();
+    let server_url_str = server_url.host_str().unwrap();
 
     // Start tests against chosen server - these download/upload tests will
     // run in separate threads
+    print!("Running download tests...");
+    perform_download_test(server_url_str, &sizes, &dimensions);
+
 
     // run a HTTP server in probably main thread and do the rest in separate thread.
 
