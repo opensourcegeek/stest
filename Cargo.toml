@@ -1,0 +1,8 @@
+[package]
+name = "stest"
+version = "0.1.0"
+authors = ["opensourcegeek <praveen.kumar@nomadrail.com>"]
+
+[dependencies]
+hyper = "0.9.13"
+xml-rs = "0.3"
