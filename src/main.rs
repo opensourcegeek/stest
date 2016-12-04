@@ -468,14 +468,17 @@ fn find_best_server_by_ping(test_servers: &Vec<TestServerConfig>)
 fn perform_download_test(server_url_str: &str, sizes: &Vec<u64>, dimensions: &Vec<u64>) -> (u64, u64) {
     let mut urls: Vec<String> = Vec::new();
     let mut counter = 0;
-    for size in sizes {
-        for dim in dimensions {
+
+    for dim in dimensions {
+        // 4 threads per URL
+        for _ in 0..4 {
             let url = format!("http://{}/speedtest/random{}x{}.jpg?x={}.{}", server_url_str,
-                              dim, dim, ext_time::precise_time_s(), counter);
+                          dim, dim, ext_time::precise_time_s(), counter);
             counter = counter + 1;
             urls.push(url);
         }
     }
+
 //    println!("{:?}", urls.len());
     let mut thread_handles = vec![];
     let start = time::Instant::now();
@@ -577,7 +580,7 @@ fn main() {
     let best_server = find_best_server_by_ping(&closest_servers);
     let sizes: Vec<u64> = vec![32768, 65536, 131072, 262144, 524288, 1048576, 7340032];
     let dimensions: Vec<u64> = vec![350, 500, 750, 1000, 1500, 2000, 2500,
-                         3000, 3500, 4000];
+                         3000];
 
     let server_url = Url::parse(best_server.url.as_str()).unwrap();
     let server_url_str = server_url.host_str().unwrap();
