@@ -344,7 +344,7 @@ fn pick_closest_servers(client_location: (Option<f32>, Option<f32>),
         let client_lat = client_location.0.unwrap();
         let client_lon = client_location.1.unwrap();
         let dist = calc_distance_in_km((client_lat, client_lon), (server.latitude, server.longitude));
-        println!("distance {}", dist);
+//        println!("distance {}", dist);
         distance_map.insert(dist.round() as u64, server);
     }
 
@@ -410,10 +410,10 @@ fn find_best_server_by_ping(test_servers: &Vec<TestServerConfig>)
     for s in test_servers {
         let server_url = Url::parse(s.url.as_str()).unwrap();
         let server_url_str = server_url.host_str().unwrap();
-        println!("{}", server_url_str);
+//        println!("{}", server_url_str);
         let latency_url = format!("http://{}/speedtest/latency.txt", server_url_str);
         let latency_url_str = latency_url.as_str();
-        println!("{}", latency_url_str);
+//        println!("{}", latency_url_str);
 
         let mut total: u64 = 0;
 
@@ -434,7 +434,7 @@ fn find_best_server_by_ping(test_servers: &Vec<TestServerConfig>)
                     if resp.status == hyper::Ok {
                         let elapsed = start.elapsed();
                         let elapsed_as_millis = (elapsed.as_secs() * 1_000) + (elapsed.subsec_nanos() / 1_000_000) as u64;
-                        println!("Time taken span {:?}", elapsed_as_millis);
+//                        println!("Time taken span {:?}", elapsed_as_millis);
                         total = total + elapsed_as_millis;
 
                     } else {
@@ -446,7 +446,7 @@ fn find_best_server_by_ping(test_servers: &Vec<TestServerConfig>)
 
                 },
                 Err(e)      => {
-                    println!("Failed to get response on ping");
+//                    println!("Failed to get response on ping");
                     // Failure responses are weighed 360000 = 1hr in millis
                     total = total + 3600000 as u64;
                 }
@@ -458,7 +458,7 @@ fn find_best_server_by_ping(test_servers: &Vec<TestServerConfig>)
     }
 
     let (latency, best_server) = server_responses.iter().next().unwrap();
-    println!("The chosen server {:?} with latency {:?}ms", best_server.name, latency);
+    println!("The chosen server is {:?} with HTTP 'ping' latency {:?}ms", best_server.name, latency);
     best_server
 }
 
@@ -484,7 +484,7 @@ fn main() {
 
     let server_hint_config = config.get("server-config").unwrap();
     let ignore_ids = find_ignore_ids(&server_hint_config);
-    println!("Ignored ids: {:?}", ignore_ids);
+//    println!("Ignored ids: {:?}", ignore_ids);
 
     // ignore servers on ignore list
     // TODO: Pass in argument to switch off ignore servers recommended by speedtest config?
@@ -503,8 +503,8 @@ fn main() {
 
     // look for ping latency for all servers (or closest servers)
     let best_server = find_best_server_by_ping(&closest_servers);
-    
-    // with the best server chosen start performing tests. These download/upload tests will
+
+    // Start tests against chosen server - these download/upload tests will
     // run in separate threads
 
     // run a HTTP server in probably main thread and do the rest in separate thread.
