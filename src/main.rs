@@ -490,14 +490,17 @@ fn perform_download_test(server_url_str: &str, sizes: &Vec<u64>, dimensions: &Ve
             let mut response = client.get(url.as_str())
                                 .headers(headers)
                                 .send();
-            print!(".");
-            io::stdout().flush().ok().expect("");
+
             match response {
                 Ok(mut res)   => {
                     if res.status == hyper::Ok {
-                        let mut buf: Vec<u8> = vec![0; 10240];
-                        let size = res.read(&mut buf);
-                        return size.unwrap() as u64;
+                        let mut buf: Vec<u8> = Vec::new();
+                        let size = res.read_to_end(&mut buf);
+                        let downloaded_bytes = size.unwrap() as u64;
+//                        println!("Downloaded = {}", downloaded_bytes);
+                        print!(".");
+                        io::stdout().flush().ok().expect("");
+                        return downloaded_bytes;
 
                     } else {
                         return 0 as u64;
@@ -526,8 +529,9 @@ fn perform_download_test(server_url_str: &str, sizes: &Vec<u64>, dimensions: &Ve
     println!("Total Download bytes {} and total time taken in millis {}",
              total_download_bytes,
              elapsed_as_millis);
-    let speed = total_download_bytes as f64 * 8.0 / (elapsed_as_millis as f64 / 1000.0);
-    println!("Download speed {} Mbps", speed / 1000.0 * 1000.0);
+    let speed = (total_download_bytes as f64 * 8.0) / (elapsed_as_millis as f64 / 1000.0);
+    let speed_in_mbps = speed / (1000.0 * 1000.0);
+    println!("Download speed {} Mbps", speed_in_mbps);
     (total_download_bytes, elapsed_as_millis)
 }
 
