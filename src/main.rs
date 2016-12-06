@@ -2,6 +2,8 @@ extern crate hyper;
 extern crate xml;
 extern crate url;
 extern crate time as ext_time;
+extern crate clap;
+extern crate csv;
 
 use std::io::Read;
 use std::collections::{HashMap, BTreeMap};
@@ -10,6 +12,7 @@ use std::time;
 use std::time::Instant;
 use std::io::prelude::*;
 use std::io;
+use std::fs::File;
 
 use hyper::client::Client;
 use hyper::client::response::Response;
@@ -19,9 +22,12 @@ use hyper::header::{Headers, UserAgent, Header, ContentLength};
 use xml::reader::{EventReader, XmlEvent};
 use xml::attribute::OwnedAttribute;
 use url::{Url, Host};
+use clap::{Arg, App, ArgMatches};
 
 const MAX_NUM_RETRIES: u64      = 10;
 const ONE_SEC_IN_MILLIS: u64    = 1000;
+
+const CSV_COLUMN_NAMES: &'static str = "test_number,server_url,rx_start,rx_total_bytes,rx_total_millis,rx_speed_mbps,rx_end,tx_start,tx_total_bytes,tx_total_millis,tx_speed_mbps,tx_end";
 
 
 #[derive(Debug)]
@@ -464,7 +470,7 @@ fn find_best_server_by_ping(test_servers: &Vec<TestServerConfig>)
 }
 
 
-fn perform_download_test(server_url_str: &str, sizes: &Vec<u64>, dimensions: &Vec<u64>) -> (u64, u64) {
+fn perform_download_test(server_url_str: &str, sizes: &Vec<u64>, dimensions: &Vec<u64>) -> (u64, u64, f64) {
     let mut urls: Vec<String> = Vec::new();
     let mut counter = 0;
 
@@ -534,11 +540,11 @@ fn perform_download_test(server_url_str: &str, sizes: &Vec<u64>, dimensions: &Ve
     let speed = (total_download_bytes as f64 * 8.0) / (elapsed_as_millis as f64 / 1000.0);
     let speed_in_mbps = speed / (1000.0 * 1000.0);
     println!("Download speed: {} Mbps", speed_in_mbps);
-    (total_download_bytes, elapsed_as_millis)
+    (total_download_bytes, elapsed_as_millis, speed_in_mbps)
 }
 
 
-fn perform_upload_test(server_url_str: &str, sizes: &Vec<u64>) -> (u64, u64) {
+fn perform_upload_test(server_url_str: &str, sizes: &Vec<u64>) -> (u64, u64, f64) {
     let mut thread_handles = vec![];
     let start = time::Instant::now();
 
@@ -588,13 +594,12 @@ fn perform_upload_test(server_url_str: &str, sizes: &Vec<u64>) -> (u64, u64) {
     let speed = (total_upload_bytes as f64 * 8.0) / (elapsed_as_millis as f64 / 1000.0);
     let speed_in_mbps = speed / (1000.0 * 1000.0);
     println!("Upload speed: {} Mbps", speed_in_mbps);
-    (total_upload_bytes, elapsed_as_millis)
+    (total_upload_bytes, elapsed_as_millis, speed_in_mbps)
 
 }
 
 
-fn main() {
-    println!("");
+fn run_test(number_of_tests: u64, file_name: Option<&str>) {
     // The speed test config file request returns nothing sometimes, but it looks like a
     // glitch on the server side as similar content-length:0 responses come back when queried
     // using curl as well. To work around it we retry upto MAX_NUM_RETRIES, it should come in
@@ -607,6 +612,7 @@ fn main() {
         config = get_config_map();
         thread::sleep(time::Duration::from_millis(ONE_SEC_IN_MILLIS));
     }
+
 //    println!("{:?}", config);
     // TODO: Add a check to exit if we cannot retrieve any config
 
@@ -633,23 +639,119 @@ fn main() {
     let mut closest_servers: Vec<TestServerConfig> = Vec::new();
     pick_closest_servers(client_location, &test_servers, &mut closest_servers);
 
+    // TODO: May be change the server for each test?
     // look for ping latency for all servers (or closest servers)
     let best_server = find_best_server_by_ping(&closest_servers);
-    let sizes: Vec<u64> = vec![32768, 65536, 131072, 262144, 524288, 1048576, 7340032];
-    let dimensions: Vec<u64> = vec![350, 500, 750, 1000, 1500, 2000, 2500,
-                         3000];
+    let mut records = Vec::new();
 
-    let server_url = Url::parse(best_server.url.as_str()).unwrap();
-    let server_url_str = server_url.host_str().unwrap();
+    let mut col_names = Vec::new();
+    for name in CSV_COLUMN_NAMES.split(',') {
+        col_names.push(name.to_string());
+    }
 
-    // Start tests against chosen server - these download/upload tests will
-    // run in separate threads
-    print!("Running download tests...");
-    perform_download_test(server_url_str, &sizes, &dimensions);
+    records.push(col_names);
+
+    for i in 0..number_of_tests {
+        let current_test = i + 1;
+        println!("Performing test {}", current_test);
+        let sizes: Vec<u64> = vec![32768, 65536, 131072, 262144, 524288, 1048576, 7340032];
+        let dimensions: Vec<u64> = vec![350, 500, 750, 1000, 1500, 2000, 2500,
+                             3000];
+        let mut record = Vec::new();
+        let server_url = Url::parse(best_server.url.as_str()).unwrap();
+        let server_url_str = server_url.host_str().unwrap();
+        record.push(current_test.to_string());
+        record.push(server_url_str.to_string());
+
+        // Start tests against chosen server - these download/upload tests will
+        // run in separate threads
+        print!("Running download tests...");
+        record.push(ext_time::precise_time_s().to_string());
+        let (rx_total_bytes, rx_total_millis, rx_speed_in_mbps) = perform_download_test(server_url_str, &sizes, &dimensions);
+        record.push(rx_total_bytes.to_string());
+        record.push(rx_total_millis.to_string());
+        record.push(rx_speed_in_mbps.to_string());
+        record.push(ext_time::precise_time_s().to_string());
+        println!("");
+
+        print!("Running upload tests...");
+        record.push(ext_time::precise_time_s().to_string());
+        let (tx_total_bytes, tx_total_millis, tx_speed_in_mbps) = perform_upload_test(best_server.url.as_str(), &sizes);
+        record.push(tx_total_bytes.to_string());
+        record.push(tx_total_millis.to_string());
+        record.push(tx_speed_in_mbps.to_string());
+        record.push(ext_time::precise_time_s().to_string());
+        // run a HTTP server in probably main thread and do the rest in separate thread.
+        println!("Done");
+        records.push(record);
+    }
+
+    match file_name {
+        Some(f)     => {
+            let mut writer = csv::Writer::from_memory();
+            for record in records {
+                writer.encode(record);
+            }
+            // println!("{}", writer.into_string());
+            write_to_file(writer.into_string(), f);
+            println!("Finished writing to csv file {}", f);
+        }
+        None        => { println!("Not writing to csv file {:?}", file_name) }
+
+    }
+
+}
+
+
+fn write_to_file(csv_content: String, file_name: &str) -> () {
+    let file_name = format!("{}.csv", file_name);
+    let mut f = File::create(file_name).expect("Unable to create file");
+    f.write_all(csv_content.as_bytes()).expect("Unable to write data to file");
+}
+
+
+fn parse_args<'a>() -> ArgMatches<'a> {
+    let matches = App::new("stest (speedtest cli)")
+        .version("0.2.0")
+        .author("opensourcegeek. <3.pravin@gmail.com>")
+        .about("A command line utility to run speedtest similar to http://speedtest.net")
+        .arg(Arg::with_name("number_tests")
+            .short("n")
+            .long("number-tests")
+            .value_name("number_tests")
+            .help("Sets number of tests to run")
+            .takes_value(true))
+        .arg(Arg::with_name("csv")
+            .short("c")
+            .long("csv")
+            .value_name("csv")
+            .help("Set name of csv file")
+            .takes_value(true))
+        .get_matches();
+    matches
+}
+
+
+fn main() {
     println!("");
 
-    print!("Running upload tests...");
-    perform_upload_test(best_server.url.as_str(), &sizes);
-    // run a HTTP server in probably main thread and do the rest in separate thread.
+    let matches = parse_args();
+    let number_of_tests = matches.value_of("number_tests");
+    let csv_file_name = matches.value_of("csv");
+    let mut n_tests: u64 = 1;
+
+    match number_of_tests {
+        Some(n)     => {
+            // Any non-numerical number of tests will default to 1 test
+            let num_tests: u64 = n.parse::<u64>().unwrap_or(1);
+            n_tests = num_tests;
+        },
+        None        => {}
+    }
+
+    println!("Number of tests to run {}", n_tests);
+//    println!("CSV file name {:?}", csv_file_name);
+
+    run_test(n_tests, csv_file_name);
 
 }
