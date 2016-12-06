@@ -11,6 +11,7 @@ xml-rs = "0.3"
 time = "0.1"
 clap = "2.19.1"
 csv = "0.14.7"
+chrono = "0.2"
 
 [dependencies.url]
 git = "https://github.com/servo/rust-url"

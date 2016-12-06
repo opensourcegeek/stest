@@ -4,6 +4,7 @@ extern crate url;
 extern crate time as ext_time;
 extern crate clap;
 extern crate csv;
+extern crate chrono;
 
 use std::io::Read;
 use std::collections::{HashMap, BTreeMap};
@@ -666,21 +667,21 @@ fn run_test(number_of_tests: u64, file_name: Option<&str>) {
         // Start tests against chosen server - these download/upload tests will
         // run in separate threads
         print!("Running download tests...");
-        record.push(ext_time::precise_time_s().to_string());
+        record.push(chrono::Local::now().to_string());
         let (rx_total_bytes, rx_total_millis, rx_speed_in_mbps) = perform_download_test(server_url_str, &sizes, &dimensions);
         record.push(rx_total_bytes.to_string());
         record.push(rx_total_millis.to_string());
         record.push(rx_speed_in_mbps.to_string());
-        record.push(ext_time::precise_time_s().to_string());
+        record.push(chrono::Local::now().to_string());
         println!("");
 
         print!("Running upload tests...");
-        record.push(ext_time::precise_time_s().to_string());
+        record.push(chrono::Local::now().to_string());
         let (tx_total_bytes, tx_total_millis, tx_speed_in_mbps) = perform_upload_test(best_server.url.as_str(), &sizes);
         record.push(tx_total_bytes.to_string());
         record.push(tx_total_millis.to_string());
         record.push(tx_speed_in_mbps.to_string());
-        record.push(ext_time::precise_time_s().to_string());
+        record.push(chrono::Local::now().to_string());
         // run a HTTP server in probably main thread and do the rest in separate thread.
         println!("Done");
         records.push(record);
@@ -692,20 +693,28 @@ fn run_test(number_of_tests: u64, file_name: Option<&str>) {
             for record in records {
                 writer.encode(record);
             }
+
+
             // println!("{}", writer.into_string());
             write_to_file(writer.into_string(), f);
             println!("Finished writing to csv file {}", f);
         }
-        None        => { println!("Not writing to csv file {:?}", file_name) }
-
+        None        => {}
     }
 
 }
 
 
 fn write_to_file(csv_content: String, file_name: &str) -> () {
-    let file_name = format!("{}.csv", file_name);
-    let mut f = File::create(file_name).expect("Unable to create file");
+    let full_file_name;
+    if file_name.to_string().ends_with(".csv") {
+        full_file_name = format!("{}", file_name);
+
+    } else {
+        full_file_name = format!("{}.csv", file_name);
+    }
+
+    let mut f = File::create(full_file_name).expect("Unable to create file");
     f.write_all(csv_content.as_bytes()).expect("Unable to write data to file");
 }
 
