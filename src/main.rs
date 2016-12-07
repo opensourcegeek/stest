@@ -471,6 +471,13 @@ fn find_best_server_by_ping(test_servers: &Vec<TestServerConfig>)
 }
 
 
+fn compute_speed_in_mbps(total_bytes: u64, total_time_in_millis: u64) -> f64 {
+    let speed = (total_bytes as f64 * 8.0) / (total_time_in_millis as f64 / 1000.0);
+    let speed_in_mbps = speed / (1000.0 * 1000.0);
+    speed_in_mbps
+}
+
+
 fn perform_download_test(server_url_str: &str, sizes: &Vec<u64>, dimensions: &Vec<u64>) -> (u64, u64, f64) {
     let mut urls: Vec<String> = Vec::new();
     let mut counter = 0;
@@ -538,8 +545,7 @@ fn perform_download_test(server_url_str: &str, sizes: &Vec<u64>, dimensions: &Ve
     println!("Downloaded {} bytes in {}ms",
              total_download_bytes,
              elapsed_as_millis);
-    let speed = (total_download_bytes as f64 * 8.0) / (elapsed_as_millis as f64 / 1000.0);
-    let speed_in_mbps = speed / (1000.0 * 1000.0);
+    let speed_in_mbps = compute_speed_in_mbps(total_download_bytes, elapsed_as_millis);
     println!("Download speed: {} Mbps", speed_in_mbps);
     (total_download_bytes, elapsed_as_millis, speed_in_mbps)
 }
@@ -592,20 +598,18 @@ fn perform_upload_test(server_url_str: &str, sizes: &Vec<u64>) -> (u64, u64, f64
     let elapsed = start.elapsed();
     let elapsed_as_millis = (elapsed.as_secs() * 1_000) + (elapsed.subsec_nanos() / 1_000_000) as u64;
     println!("Uploaded {} bytes in {}ms", total_upload_bytes, elapsed_as_millis);
-    let speed = (total_upload_bytes as f64 * 8.0) / (elapsed_as_millis as f64 / 1000.0);
-    let speed_in_mbps = speed / (1000.0 * 1000.0);
+    let speed_in_mbps = compute_speed_in_mbps(total_upload_bytes, elapsed_as_millis);
     println!("Upload speed: {} Mbps", speed_in_mbps);
     (total_upload_bytes, elapsed_as_millis, speed_in_mbps)
 
 }
 
 
-fn run_test(number_of_tests: u64, file_name: Option<&str>) {
+fn run_test(number_of_tests: u64, file_name: Option<&str>, server_country: Option<&str>) {
     // The speed test config file request returns nothing sometimes, but it looks like a
     // glitch on the server side as similar content-length:0 responses come back when queried
     // using curl as well. To work around it we retry upto MAX_NUM_RETRIES, it should come in
     // via passed in args as well.
-    // TODO: Pass in MAX_NUM_RETRIES from command line
     let mut got_config = false;
     let current_count = 0;
     let mut config = get_config_map();
@@ -617,7 +621,7 @@ fn run_test(number_of_tests: u64, file_name: Option<&str>) {
 //    println!("{:?}", config);
     // TODO: Add a check to exit if we cannot retrieve any config
 
-    let mut test_servers = get_all_test_servers();
+    let mut test_servers: Vec<TestServerConfig> = get_all_test_servers();
     println!("Total servers available: {:?}", test_servers.len());
 
     let server_hint_config = config.get("server-config").unwrap();
@@ -634,11 +638,24 @@ fn run_test(number_of_tests: u64, file_name: Option<&str>) {
     println!("Total servers available after ignoring: {:?}", test_servers.len());
     println!("");
 
-    // look for closest servers - we should add a switch to avoid this distance check
-    let client_conf = config.get("client").unwrap();
-    let client_location = get_client_location(&client_conf);
-    let mut closest_servers: Vec<TestServerConfig> = Vec::new();
-    pick_closest_servers(client_location, &test_servers, &mut closest_servers);
+    let closest_servers: Vec<TestServerConfig> = match server_country {
+        Some(sc)    => {
+            test_servers.retain(|ref mut server| {
+                // If not ignore ids list keep this server
+                server.country == sc.to_string()
+            });
+            println!("Number of servers in {} are {}", sc, test_servers.len());
+            test_servers
+        },
+        None        => {
+            // look for closest servers - we should add a switch to avoid this distance check
+            let client_conf = config.get("client").unwrap();
+            let client_location = get_client_location(&client_conf);
+            let mut closest_servers: Vec<TestServerConfig> = Vec::new();
+            pick_closest_servers(client_location, &test_servers, &mut closest_servers);
+            closest_servers
+        }
+    };
 
     // TODO: May be change the server for each test?
     // look for ping latency for all servers (or closest servers)
@@ -656,8 +673,7 @@ fn run_test(number_of_tests: u64, file_name: Option<&str>) {
         let current_test = i + 1;
         println!("Performing test {}", current_test);
         let sizes: Vec<u64> = vec![32768, 65536, 131072, 262144, 524288, 1048576, 7340032];
-        let dimensions: Vec<u64> = vec![350, 500, 750, 1000, 1500, 2000, 2500,
-                             3000];
+        let dimensions: Vec<u64> = vec![350, 500, 750, 1000];
         let mut record = Vec::new();
         let server_url = Url::parse(best_server.url.as_str()).unwrap();
         let server_url_str = server_url.host_str().unwrap();
@@ -736,6 +752,12 @@ fn parse_args<'a>() -> ArgMatches<'a> {
             .value_name("csv")
             .help("Set name of csv file")
             .takes_value(true))
+        .arg(Arg::with_name("server_country")
+            .short("sc")
+            .long("server-country")
+            .value_name("server_country")
+            .help("This will scan scan servers only from given country")
+            .takes_value(true))
         .get_matches();
     matches
 }
@@ -747,6 +769,7 @@ fn main() {
     let matches = parse_args();
     let number_of_tests = matches.value_of("number_tests");
     let csv_file_name = matches.value_of("csv");
+    let server_country = matches.value_of("server_country");
     let mut n_tests: u64 = 1;
 
     match number_of_tests {
@@ -761,6 +784,6 @@ fn main() {
     println!("Number of tests to run {}", n_tests);
 //    println!("CSV file name {:?}", csv_file_name);
 
-    run_test(n_tests, csv_file_name);
+    run_test(n_tests, csv_file_name, server_country);
 
 }
