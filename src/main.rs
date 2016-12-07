@@ -673,7 +673,7 @@ fn run_test(number_of_tests: u64, file_name: Option<&str>, server_country: Optio
         let current_test = i + 1;
         println!("Performing test {}", current_test);
         let sizes: Vec<u64> = vec![32768, 65536, 131072, 262144, 524288, 1048576, 7340032];
-        let dimensions: Vec<u64> = vec![350, 500, 750, 1000, 1500, 2000, 2500];
+        let dimensions: Vec<u64> = vec![350, 500, 750, 1000, 1500, 2000, 2500, 3000];
         let mut record = Vec::new();
         let server_url = Url::parse(best_server.url.as_str()).unwrap();
         let server_url_str = server_url.host_str().unwrap();
@@ -756,7 +756,7 @@ fn parse_args<'a>() -> ArgMatches<'a> {
             .short("sc")
             .long("server-country")
             .value_name("server_country")
-            .help("This will scan scan servers only from given country - it might take a while before it finds the best server")
+            .help("This will scan servers only from given country - it might take a while before it finds the best server")
             .takes_value(true))
         .get_matches();
     matches
