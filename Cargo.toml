@@ -1,6 +1,6 @@
 [package]
 name = "stest"
-version = "0.2.1"
+version = "0.3.0"
 authors = ["opensourcegeek <praveen.kumar@nomadrail.com>"]
 
 [features]

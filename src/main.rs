@@ -23,7 +23,7 @@ use hyper::header::{Headers, UserAgent, Header, ContentLength};
 use xml::reader::{EventReader, XmlEvent};
 use xml::attribute::OwnedAttribute;
 use url::{Url, Host};
-use clap::{Arg, App, ArgMatches};
+use clap::{Arg, App, ArgMatches, SubCommand};
 
 const MAX_NUM_RETRIES: u64      = 10;
 const ONE_SEC_IN_MILLIS: u64    = 1000;
@@ -748,7 +748,7 @@ fn write_to_file(csv_content: String, file_name: &str) -> () {
 
 fn parse_args<'a>() -> ArgMatches<'a> {
     let matches = App::new("stest (speedtest cli)")
-        .version("0.2.1")
+        .version("0.3.0")
         .author("opensourcegeek. <3.pravin@gmail.com>")
         .about("A command line utility to run speedtest similar to http://speedtest.net")
         .arg(Arg::with_name("number_tests")
@@ -769,6 +769,13 @@ fn parse_args<'a>() -> ArgMatches<'a> {
             .value_name("server_country")
             .help("This will scan servers only from given country - it might take a while before it finds the best server")
             .takes_value(true))
+        .subcommand(SubCommand::with_name("server")
+                .about("Available test servers can be searched for")
+                .arg(Arg::with_name("list")
+                    .short("l")
+                    .long("list")
+                    .value_name("list")
+                    .help("prints all servers")))
         .get_matches();
     matches
 }
