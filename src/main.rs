@@ -642,9 +642,15 @@ fn run_test(number_of_tests: u64, file_name: Option<&str>, server_country: Optio
         Some(sc)    => {
             test_servers.retain(|ref mut server| {
                 // If not ignore ids list keep this server
-                server.country == sc.to_string()
+                server.country.to_lowercase() == sc.to_string().to_lowercase()
             });
-            println!("Number of servers in {} are {} - it might take a while to find best server", sc, test_servers.len());
+
+            if test_servers.len() > 10 {
+                println!("Number of servers in {} are {} - it might take a while to find best server", sc, test_servers.len());
+            } else {
+                println!("Number of servers in {} are {}", sc, test_servers.len());
+            }
+
             test_servers
         },
         None        => {
@@ -657,65 +663,70 @@ fn run_test(number_of_tests: u64, file_name: Option<&str>, server_country: Optio
         }
     };
 
-    // TODO: May be change the server for each test?
-    // look for ping latency for all servers (or closest servers)
-    let best_server = find_best_server_by_ping(&closest_servers);
-    let mut records = Vec::new();
+    if closest_servers.len() > 0 {
+        // TODO: May be change the server for each test?
+        // look for ping latency for all servers (or closest servers)
+        let best_server = find_best_server_by_ping(&closest_servers);
+        let mut records = Vec::new();
 
-    let mut col_names = Vec::new();
-    for name in CSV_COLUMN_NAMES.split(',') {
-        col_names.push(name.to_string());
-    }
-
-    records.push(col_names);
-
-    for i in 0..number_of_tests {
-        let current_test = i + 1;
-        println!("Performing test {}", current_test);
-        let sizes: Vec<u64> = vec![32768, 65536, 131072, 262144, 524288, 1048576, 7340032];
-        let dimensions: Vec<u64> = vec![350, 500, 750, 1000, 1500, 2000, 2500, 3000];
-        let mut record = Vec::new();
-        let server_url = Url::parse(best_server.url.as_str()).unwrap();
-        let server_url_str = server_url.host_str().unwrap();
-        record.push(current_test.to_string());
-        record.push(server_url_str.to_string());
-
-        // Start tests against chosen server - these download/upload tests will
-        // run in separate threads
-        print!("Running download tests...");
-        record.push(chrono::Local::now().to_string());
-        let (rx_total_bytes, rx_total_millis, rx_speed_in_mbps) = perform_download_test(server_url_str, &sizes, &dimensions);
-        record.push(rx_total_bytes.to_string());
-        record.push(rx_total_millis.to_string());
-        record.push(rx_speed_in_mbps.to_string());
-        record.push(chrono::Local::now().to_string());
-        println!("");
-
-        print!("Running upload tests...");
-        record.push(chrono::Local::now().to_string());
-        let (tx_total_bytes, tx_total_millis, tx_speed_in_mbps) = perform_upload_test(best_server.url.as_str(), &sizes);
-        record.push(tx_total_bytes.to_string());
-        record.push(tx_total_millis.to_string());
-        record.push(tx_speed_in_mbps.to_string());
-        record.push(chrono::Local::now().to_string());
-        // run a HTTP server in probably main thread and do the rest in separate thread.
-        println!("Done");
-        records.push(record);
-    }
-
-    match file_name {
-        Some(f)     => {
-            let mut writer = csv::Writer::from_memory();
-            for record in records {
-                writer.encode(record);
-            }
-
-
-            // println!("{}", writer.into_string());
-            write_to_file(writer.into_string(), f);
-            println!("Finished writing to csv file {}", f);
+        let mut col_names = Vec::new();
+        for name in CSV_COLUMN_NAMES.split(',') {
+            col_names.push(name.to_string());
         }
-        None        => {}
+
+        records.push(col_names);
+
+        for i in 0..number_of_tests {
+            let current_test = i + 1;
+            println!("Performing test {}", current_test);
+            let sizes: Vec<u64> = vec![32768, 65536, 131072, 262144, 524288, 1048576, 7340032];
+            let dimensions: Vec<u64> = vec![350, 500, 750, 1000, 1500, 2000, 2500, 3000];
+            let mut record = Vec::new();
+            let server_url = Url::parse(best_server.url.as_str()).unwrap();
+            let server_url_str = server_url.host_str().unwrap();
+            record.push(current_test.to_string());
+            record.push(server_url_str.to_string());
+
+            // Start tests against chosen server - these download/upload tests will
+            // run in separate threads
+            print!("Running download tests...");
+            record.push(chrono::Local::now().to_string());
+            let (rx_total_bytes, rx_total_millis, rx_speed_in_mbps) = perform_download_test(server_url_str, &sizes, &dimensions);
+            record.push(rx_total_bytes.to_string());
+            record.push(rx_total_millis.to_string());
+            record.push(rx_speed_in_mbps.to_string());
+            record.push(chrono::Local::now().to_string());
+            println!("");
+
+            print!("Running upload tests...");
+            record.push(chrono::Local::now().to_string());
+            let (tx_total_bytes, tx_total_millis, tx_speed_in_mbps) = perform_upload_test(best_server.url.as_str(), &sizes);
+            record.push(tx_total_bytes.to_string());
+            record.push(tx_total_millis.to_string());
+            record.push(tx_speed_in_mbps.to_string());
+            record.push(chrono::Local::now().to_string());
+            // run a HTTP server in probably main thread and do the rest in separate thread.
+            println!("Done");
+            records.push(record);
+        }
+
+        match file_name {
+            Some(f)     => {
+                let mut writer = csv::Writer::from_memory();
+                for record in records {
+                    writer.encode(record);
+                }
+
+
+                // println!("{}", writer.into_string());
+                write_to_file(writer.into_string(), f);
+                println!("Finished writing to csv file {}", f);
+            }
+            None        => {}
+        }
+
+    } else {
+        println!("Cannot find any servers, please note that if you're searching by country name currently it is an exact match.");
     }
 
 }
