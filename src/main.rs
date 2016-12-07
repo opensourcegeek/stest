@@ -748,7 +748,7 @@ fn write_to_file(csv_content: String, file_name: &str) -> () {
 
 fn parse_args<'a>() -> ArgMatches<'a> {
     let matches = App::new("stest (speedtest cli)")
-        .version("0.2.0")
+        .version("0.2.1")
         .author("opensourcegeek. <3.pravin@gmail.com>")
         .about("A command line utility to run speedtest similar to http://speedtest.net")
         .arg(Arg::with_name("number_tests")
