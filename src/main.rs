@@ -2,9 +2,13 @@ extern crate hyper;
 extern crate xml;
 extern crate url;
 extern crate time as ext_time;
-extern crate clap;
 extern crate csv;
+extern crate clap;
 extern crate chrono;
+
+mod args;
+mod file_utils;
+mod geo;
 
 use std::io::Read;
 use std::collections::{HashMap, BTreeMap};
@@ -23,7 +27,6 @@ use hyper::header::{Headers, UserAgent, Header, ContentLength};
 use xml::reader::{EventReader, XmlEvent};
 use xml::attribute::OwnedAttribute;
 use url::{Url, Host};
-use clap::{Arg, App, ArgMatches, SubCommand};
 
 const MAX_NUM_RETRIES: u64      = 10;
 const ONE_SEC_IN_MILLIS: u64    = 1000;
@@ -325,19 +328,6 @@ fn get_all_test_servers() -> Vec<TestServerConfig> {
 }
 
 
-fn calc_distance_in_km((lat1, lon1): (f32, f32), (lat2, lon2): (f32, f32)) -> f32 {
-    let radius_in_km = 6371.0;
-    let dlat = (lat2 - lat1).to_radians();
-    let dlon = (lon2 - lon1).to_radians();
-    let a = (dlat / 2.0).sin() * (dlat / 2.0).sin() +
-         (lat1.to_radians()).cos() *
-         (lat2.to_radians()).cos() *
-         (dlon / 2.0).sin() * (dlon / 2.0).sin();
-    let c = 2.0 * a.sqrt().atan2((1.0 - a).sqrt());
-    (radius_in_km * c) as f32
-}
-
-
 fn pick_closest_servers(client_location: (Option<f32>, Option<f32>),
                         all_test_servers: &Vec<TestServerConfig>,
                         result: &mut Vec<TestServerConfig>)
@@ -353,7 +343,8 @@ fn pick_closest_servers(client_location: (Option<f32>, Option<f32>),
     for server in all_test_servers {
         let client_lat = client_location.0.unwrap();
         let client_lon = client_location.1.unwrap();
-        let dist = calc_distance_in_km((client_lat, client_lon), (server.latitude, server.longitude));
+        let dist = geo::calc_distance_in_km((client_lat, client_lon),
+                                            (server.latitude, server.longitude));
 //        println!("distance {}", dist);
         distance_map.insert(dist.round() as u64, server);
     }
@@ -717,9 +708,8 @@ fn run_test(number_of_tests: u64, file_name: Option<&str>, server_country: Optio
                     writer.encode(record);
                 }
 
-
                 // println!("{}", writer.into_string());
-                write_to_file(writer.into_string(), f);
+                file_utils::write_to_file(writer.into_string(), f);
                 println!("Finished writing to csv file {}", f);
             }
             None        => {}
@@ -732,59 +722,10 @@ fn run_test(number_of_tests: u64, file_name: Option<&str>, server_country: Optio
 }
 
 
-fn write_to_file(csv_content: String, file_name: &str) -> () {
-    let full_file_name;
-    if file_name.to_string().ends_with(".csv") {
-        full_file_name = format!("{}", file_name);
-
-    } else {
-        full_file_name = format!("{}.csv", file_name);
-    }
-
-    let mut f = File::create(full_file_name).expect("Unable to create file");
-    f.write_all(csv_content.as_bytes()).expect("Unable to write data to file");
-}
-
-
-fn parse_args<'a>() -> ArgMatches<'a> {
-    let matches = App::new("stest (speedtest cli)")
-        .version("0.3.0")
-        .author("opensourcegeek. <3.pravin@gmail.com>")
-        .about("A command line utility to run speedtest similar to http://speedtest.net")
-        .arg(Arg::with_name("number_tests")
-            .short("n")
-            .long("number-tests")
-            .value_name("number_tests")
-            .help("Sets number of tests to run")
-            .takes_value(true))
-        .arg(Arg::with_name("csv")
-            .short("c")
-            .long("csv")
-            .value_name("csv")
-            .help("Set name of csv file")
-            .takes_value(true))
-        .arg(Arg::with_name("server_country")
-            .short("sc")
-            .long("server-country")
-            .value_name("server_country")
-            .help("This will scan servers only from given country - it might take a while before it finds the best server")
-            .takes_value(true))
-        .subcommand(SubCommand::with_name("server")
-                .about("Available test servers can be searched for")
-                .arg(Arg::with_name("list")
-                    .short("l")
-                    .long("list")
-                    .value_name("list")
-                    .help("prints all servers")))
-        .get_matches();
-    matches
-}
-
-
 fn main() {
     println!("");
 
-    let matches = parse_args();
+    let matches = args::parse_args();
     let number_of_tests = matches.value_of("number_tests");
     let csv_file_name = matches.value_of("csv");
     let server_country = matches.value_of("server_country");
@@ -803,5 +744,4 @@ fn main() {
 //    println!("CSV file name {:?}", csv_file_name);
 
     run_test(n_tests, csv_file_name, server_country);
-
 }
