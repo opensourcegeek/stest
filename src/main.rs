@@ -415,7 +415,7 @@ fn perform_download_test(server_url_str: &str, sizes: &Vec<u64>, dimensions: &Ve
 
                         while !all_read {
                             let elapsed = start.elapsed();
-                            if elapsed.as_secs() > 10 {
+                            if elapsed.as_secs() >= 10 {
                                 // Link is slow - so not worth reading any more and quit this thread
                                 break;
                             }
@@ -497,7 +497,7 @@ fn perform_upload_test(server_url_str: &str, sizes: &Vec<u64>, max_size: u64) ->
 
             for current in 0..num_cycles {
 
-                if start.elapsed().as_secs() > 10 {
+                if start.elapsed().as_secs() >= 10 {
                     // if it's taken more than 10 seconds
                     // since thread started we break.
                     break;

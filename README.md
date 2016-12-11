@@ -21,14 +21,18 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -c, --csv <csv>                          Set name of csv file
-    -n, --number-tests <number_tests>        Sets number of tests to run
-    -s, --server-country <server_country>    This will scan servers only from given country - it might take a while before it finds the best server
+    -c, --csv <csv>                                    Set name of csv file
+    -n, --number-tests <number_tests>                  Sets number of tests to run
+    -s, --server-country <server_country>
+            This will scan servers only from given country name - it might take a while before it finds the best server
+    -o, --server-country-code <server_country_code>
+            This will scan servers only from given country code - it might take a while before it finds the best server
 ```
 
 
 to-do
 -----
 
+   - Add a switch to use local cache for servers to avoid downloading each time. 
    - Add command line switches to use specific server, override geo-ip lookup.
    - Add command line argument to run in server mode (no security) again rendering CSV/JSON file. I'm thinking websocket but not sure!
