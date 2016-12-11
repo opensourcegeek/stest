@@ -542,7 +542,16 @@ fn perform_upload_test(server_url_str: &str, sizes: &Vec<u64>, max_size: u64) ->
 }
 
 
-fn run_test(number_of_tests: u64, file_name: Option<&str>, server_country: Option<&str>) {
+//fn filter_server_list_by_country_name_or_code(test_servers: &Vec<TestServerConfig>,
+//        server_country: Option<&str>,
+//        server_countr_code: Option<&str>) {
+//
+//}
+
+
+fn run_test(number_of_tests: u64, file_name: Option<&str>,
+            server_country: Option<&str>,
+            server_country_code: Option<&str>) {
     // The speed test config file request returns nothing sometimes, but it looks like a
     // glitch on the server side as similar content-length:0 responses come back when queried
     // using curl as well. To work around it we retry upto MAX_NUM_RETRIES, it should come in
@@ -590,14 +599,35 @@ fn run_test(number_of_tests: u64, file_name: Option<&str>, server_country: Optio
             test_servers
         },
         None        => {
-            // look for closest servers - we should add a switch to avoid this distance check
-            let client_conf = config.get("client").unwrap();
-            let client_location = get_client_location(&client_conf);
-            let mut closest_servers: Vec<TestServerConfig> = Vec::new();
-            pick_closest_servers(client_location, &test_servers, &mut closest_servers);
-            closest_servers
+            let servers = match server_country_code {
+                Some(scc) => {
+                    test_servers.retain(|ref mut server| {
+                        // If not ignore ids list keep this server
+                        server.country_code.to_lowercase() == scc.to_string().to_lowercase()
+                    });
+
+                    if test_servers.len() > 10 {
+                        println!("Number of servers in {} are {} - it might take a while to find best server", scc, test_servers.len());
+                    } else {
+                        println!("Number of servers in {} are {}", scc, test_servers.len());
+                    }
+
+                    test_servers
+                },
+                None => {
+                    // both server country and server country code are not set.
+                    // look for closest servers - we should add a switch to avoid this distance check
+                    let client_conf = config.get("client").unwrap();
+                    let client_location = get_client_location(&client_conf);
+                    let mut closest_servers: Vec<TestServerConfig> = Vec::new();
+                    pick_closest_servers(client_location, &test_servers, &mut closest_servers);
+                    closest_servers
+                }
+            };
+            servers
         }
     };
+
 
     if closest_servers.len() > 0 {
         // TODO: May be change the server for each test?
@@ -678,7 +708,8 @@ fn main() {
     let matches = args::parse_args();
     let number_of_tests = matches.value_of("number_tests");
     let csv_file_name = matches.value_of("csv");
-    let server_country = matches.value_of("server_country");
+    let server_country = matches.value_of("server-country");
+    let server_country_code = matches.value_of("server-country-code");
     let mut n_tests: u64 = 1;
 
     match number_of_tests {
@@ -692,6 +723,6 @@ fn main() {
 
     println!("Number of tests to run {}", n_tests);
 //    println!("CSV file name {:?}", csv_file_name);
-
-    run_test(n_tests, csv_file_name, server_country);
+//    println!("Server country - {:?} code - {:?}", server_country, server_country_code);
+    run_test(n_tests, csv_file_name, server_country, server_country_code);
 }

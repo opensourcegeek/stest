@@ -1,5 +1,5 @@
 
-use clap::{Arg, App, ArgMatches, SubCommand};
+use clap::{Arg, App, ArgMatches, SubCommand, ArgGroup};
 
 pub fn parse_args<'a>() -> ArgMatches<'a> {
     let matches = App::new("stest (speedtest cli)")
@@ -18,19 +18,19 @@ pub fn parse_args<'a>() -> ArgMatches<'a> {
             .value_name("csv")
             .help("Set name of csv file")
             .takes_value(true))
-        .arg(Arg::with_name("server_country")
-            .short("sc")
-            .long("server-country")
-            .value_name("server_country")
-            .help("This will scan servers only from given country - it might take a while before it finds the best server")
-            .takes_value(true))
-        .subcommand(SubCommand::with_name("server")
-                .about("Available test servers can be searched for")
-                .arg(Arg::with_name("list")
-                    .short("l")
-                    .long("list")
-                    .value_name("list")
-                    .help("prints all servers")))
+        .args_from_usage(
+            "-s --server-country [server_country] 'This will scan servers only from given country name - it might take a while before it finds the best server'
+             -o --server-country-code [server_country_code]  'This will scan servers only from given country code - it might take a while before it finds the best server'")
+        .group(ArgGroup::with_name("server-filter")
+          .args(&["server-country", "server-country-code"]))
+        //        .subcommand(SubCommand::with_name("server")
+        //                .about("Available test servers can be searched for")
+        //                .arg(Arg::with_name("list")
+        //                    .short("l")
+        //                    .long("list")
+        //                    .value_name("list")
+        //                    .help("prints all servers")))
         .get_matches();
     matches
 }
+
