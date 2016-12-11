@@ -233,7 +233,7 @@ fn pick_closest_servers(client_location: (Option<f32>, Option<f32>),
         distance_map.insert(dist.round() as u64, server);
     }
 
-    let max_servers = 10;
+    let max_servers = 5;
     let mut count = 0;
 
     for (_, v) in distance_map.iter() {
