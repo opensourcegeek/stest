@@ -273,6 +273,31 @@ fn find_ignore_ids(ref client_conf: &Vec<OwnedAttribute>) -> Vec<u64> {
 }
 
 
+fn find_upload_max(client_conf: &Vec<OwnedAttribute>) -> u64 {
+
+    for attrib in client_conf {
+        if attrib.name.to_string() == "maxchunksize".to_string() {
+            let upload_max = attrib.value.to_string();
+            if upload_max.contains("K") {
+                // upload max is in KB - convert it to bytes
+                let res = upload_max.trim_matches('K');
+                // default to 32K if we cannot get the actual number!
+                return res.parse::<u64>().unwrap_or(32) * 1024;
+
+            } else if upload_max.contains("M") {
+                // upload max is in MB - convert it to bytes
+                let res = upload_max.trim_matches('M');
+                // default to 1 MB if we cannot get the actual number!
+                return res.parse::<u64>().unwrap_or(1) * 1024 * 1024;
+            }
+
+        }
+    }
+    // default is 32KB
+    32768
+}
+
+
 fn get_client_location(ref client_conf: &Vec<OwnedAttribute>) -> (Option<f32>, Option<f32>) {
     let mut latitude: Option<f32> = Option::None;
     let mut longitude: Option<f32> = Option::None;
@@ -385,13 +410,37 @@ fn perform_download_test(server_url_str: &str, sizes: &Vec<u64>, dimensions: &Ve
             match response {
                 Ok(mut res)   => {
                     if res.status == hyper::Ok {
-                        let mut buf: Vec<u8> = Vec::new();
-                        let size = res.read_to_end(&mut buf);
-                        let downloaded_bytes = size.unwrap() as u64;
-//                        println!("Downloaded = {}", downloaded_bytes);
+                        let mut all_read = false;
+                        let mut read_bytes = 0;
+
+                        while !all_read {
+                            let elapsed = start.elapsed();
+                            if elapsed.as_secs() > 10 {
+                                // Link is slow - so not worth reading any more and quit this thread
+                                break;
+                            }
+
+                            let mut buf: Vec<u8> = vec![0; 10240];
+                            let size = res.read(&mut buf);
+                            match size {
+                                Ok(s)   => {
+                                    read_bytes = read_bytes + s as u64;
+                                    if s == 0  {
+                                        // break out of loop as all read!
+                                        all_read = true;
+                                    }
+                                },
+                                Err(e) => {
+                                    all_read = true;
+                                }
+                            }
+
+                        }
+//                        println!("Downloaded = {} in {} seconds", read_bytes, start.elapsed().as_secs());
                         print!(".");
                         io::stdout().flush().ok().expect("");
-                        return downloaded_bytes;
+//                        io::stdout().write_all("\x1b[1K".as_bytes()).unwrap();
+                        return read_bytes;
 
                     } else {
                         return 0 as u64;
@@ -426,7 +475,7 @@ fn perform_download_test(server_url_str: &str, sizes: &Vec<u64>, dimensions: &Ve
 }
 
 
-fn perform_upload_test(server_url_str: &str, sizes: &Vec<u64>) -> (u64, u64, f64) {
+fn perform_upload_test(server_url_str: &str, sizes: &Vec<u64>, max_size: u64) -> (u64, u64, f64) {
     let mut thread_handles = vec![];
     let start = time::Instant::now();
 
@@ -434,31 +483,44 @@ fn perform_upload_test(server_url_str: &str, sizes: &Vec<u64>) -> (u64, u64, f64
         let full_size = s.clone();
         let upload_url = server_url_str.to_string();
         let handle = thread::spawn(move || {
+            // 16K is a factor of all sizes so using that
+            let sixteen_kb = 1024 * 16;
+            let num_cycles = max_size / sixteen_kb;
             let mut buff: Vec<u8> = vec![0; full_size as usize];
             let mut client = Client::new();
             client.set_redirect_policy(RedirectPolicy::FollowAll);
 
             let mut headers = Headers::new();
             headers.set(UserAgent("Hyper-speedtest".to_owned()));
-            let mut response = client.post(upload_url.as_str())
-                                .body(Body::BufBody(&buff, full_size as usize))
-                                .headers(headers)
+
+            let mut total_bytes_uploaded = 0;
+
+            for current in 0..num_cycles {
+
+                if start.elapsed().as_secs() > 10 {
+                    // if it's taken more than 10 seconds
+                    // since thread started we break.
+                    break;
+                }
+
+                let mut response = client.post(upload_url.as_str())
+                                .body(Body::BufBody(&buff, sixteen_kb as usize))
+                                .headers(headers.clone())
                                 .send();
 
-            match response {
-                Ok(res)     => {
-//                    println!("{:?}", res);
-                    print!(".");
-                    io::stdout().flush().ok().expect("");
-                    full_size
-                },
-                Err(e)       => {
-                    print!(".");
-                    io::stdout().flush().ok().expect("");
-//                    println!("{:?}", e);
-                    0
+                match response {
+                    Ok(res)     => {
+    //                    println!("{:?}", res);
+                        print!(".");
+                        io::stdout().flush().ok().expect("");
+                        total_bytes_uploaded = total_bytes_uploaded + sixteen_kb;
+                    },
+                    Err(e)       => {}
                 }
+
             }
+            total_bytes_uploaded
+
         });
         thread_handles.push(handle);
     }
@@ -573,8 +635,13 @@ fn run_test(number_of_tests: u64, file_name: Option<&str>, server_country: Optio
             println!("");
 
             print!("Running upload tests...");
+            let upload_config = config.get("upload").unwrap();
+            let max_size = find_upload_max(&upload_config);
             record.push(chrono::Local::now().to_string());
-            let (tx_total_bytes, tx_total_millis, tx_speed_in_mbps) = perform_upload_test(best_server.url.as_str(), &sizes);
+            let (tx_total_bytes, tx_total_millis, tx_speed_in_mbps) = perform_upload_test(
+                best_server.url.as_str(),
+                &sizes,
+                max_size);
             record.push(tx_total_bytes.to_string());
             record.push(tx_total_millis.to_string());
             record.push(tx_speed_in_mbps.to_string());

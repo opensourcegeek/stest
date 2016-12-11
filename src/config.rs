@@ -42,57 +42,6 @@ pub fn get_config_map() -> HashMap<String, Vec<OwnedAttribute>> {
 
                             if name.to_string() == "client".to_string() {
                                 full_config.insert(name.to_string(), attributes);
-//                                let mut ip: String = String::new();
-//                                let mut lat: f32 = 10000.0;
-//                                let mut lon: f32 = 10000.0;
-//                                let mut isp: String = String::new();
-//                                let mut isprating: f32 = 0.0;
-//                                let mut ispdlavg: u64 = 0;
-//                                let mut ispulavg: u64 = 0;
-//
-//                                for attribute in attributes {
-//                                    let att_name = attribute.name.to_string();
-//                                    let att_value = &attribute.value;
-//
-//                                    if att_name == "ip".to_string() {
-//                                        ip = att_value.to_string();
-//                                    }
-//
-//                                    if att_name == "lat".to_string() {
-//                                        lat = att_value.parse::<f32>().unwrap();
-//                                    }
-//
-//                                    if att_name == "lon".to_string() {
-//                                        lon = att_value.parse::<f32>().unwrap();
-//                                    }
-//
-//                                    if att_name == "isp".to_string() {
-//                                        isp = att_value.to_string();
-//                                    }
-//
-//                                    if att_name == "ispdlavg".to_string() {
-//                                        ispdlavg = att_value.parse::<u64>().unwrap();
-//                                    }
-//
-//                                    if att_name == "ispulavg".to_string() {
-//                                        ispulavg = att_value.parse::<u64>().unwrap();
-//                                    }
-//
-//                                    if att_name == "isprating".to_string() {
-//                                        isprating = att_value.parse::<f32>().unwrap();
-//                                    }
-//
-//                                }
-//
-//                                client_config = ClientConfig {
-//                                    ip: ip,
-//                                    lat: lat,
-//                                    lon: lon,
-//                                    isp: isp,
-//                                    isprating: isprating,
-//                                    ispdlavg: ispdlavg,
-//                                    ispulavg: ispulavg
-//                                };
 
                             } else if name.to_string() == "server-config".to_string() {
                                 full_config.insert(name.to_string(), attributes);
