@@ -173,7 +173,7 @@ fn get_all_test_servers() -> Vec<TestServerConfig> {
 }
 
 
-fn pick_closest_servers(client_location: (Option<f32>, Option<f32>),
+fn pick_closest_servers(client_location: (f32, f32),
                         all_test_servers: &Vec<TestServerConfig>,
                         result: &mut Vec<TestServerConfig>)
     -> () {
@@ -186,8 +186,8 @@ fn pick_closest_servers(client_location: (Option<f32>, Option<f32>),
     let mut distance_map: BTreeMap<u64, &TestServerConfig> = BTreeMap::new();
 
     for server in all_test_servers {
-        let client_lat = client_location.0.unwrap();
-        let client_lon = client_location.1.unwrap();
+        let client_lat = client_location.0;
+        let client_lon = client_location.1;
         let dist = geo::calc_distance_in_km((client_lat, client_lon),
                                             (server.latitude, server.longitude));
 //        println!("distance {}", dist);
@@ -218,18 +218,11 @@ fn pick_closest_servers(client_location: (Option<f32>, Option<f32>),
 }
 
 
-fn find_ignore_ids(ref client_conf: &Vec<OwnedAttribute>) -> Vec<u64> {
-    let mut ignored_ids: Vec<u64> = Vec::new();
+fn find_ignore_ids(ids_str: String) -> Vec<u64> {
+    let ignored_ids = ids_str.split(",").map(|x| {
+        x.parse::<u64>().unwrap()
+    }).collect();
 
-    for attrib in *client_conf {
-        if attrib.name.to_string() == "ignoreids".to_string() {
-            let ids_str: String = attrib.value.to_string();
-            ignored_ids = ids_str.split(",").map(|x| {
-                x.parse::<u64>().unwrap()
-            }).collect();
-            break;
-        }
-    }
     ignored_ids
 }
 
@@ -437,9 +430,8 @@ fn perform_download_test(server_url_str: &str, dimensions: &Vec<u64>) -> (u64, u
 
 
 fn perform_upload_test(server_url_str: &str,
-                       client_conf: &Vec<OwnedAttribute>,
-                       sizes: &Vec<u64>,
-                       max_size: u64) -> (u64, u64, f64) {
+                       client_conf: &config::UploadConfig,
+                       sizes: &Vec<u64>) -> (u64, u64, f64) {
     let mut thread_handles = vec![];
     let start = time::Instant::now();
     let ratio = 1;
@@ -512,7 +504,7 @@ fn perform_upload_test(server_url_str: &str,
                 },
                 Err(e)       => {}
             }
-            println!("Total bytes uploaded {}", full_size);
+//            println!("Total bytes uploaded {}", full_size);
             total_bytes_uploaded = total_bytes_uploaded + full_size;
             total_bytes_uploaded
 
@@ -546,9 +538,10 @@ fn run_test(number_of_tests: u64, file_name: Option<&str>,
     // using curl as well. To work around it we retry upto MAX_NUM_RETRIES, it should come in
     // via passed in args as well.
     let current_count = 0;
-    let mut config = config::get_config_map();
-    while !config.contains_key("client") && current_count <= MAX_NUM_RETRIES {
-        config = config::get_config_map();
+    let mut config = config::FullConfig::new();
+
+    while !config.parsing_succeeded && current_count <= MAX_NUM_RETRIES {
+        config = config::FullConfig::new();
         thread::sleep(time::Duration::from_millis(ONE_SEC_IN_MILLIS));
     }
 
@@ -558,8 +551,8 @@ fn run_test(number_of_tests: u64, file_name: Option<&str>,
     let mut test_servers: Vec<TestServerConfig> = get_all_test_servers();
     println!("Total servers available: {:?}", test_servers.len());
 
-    let server_hint_config = config.get("server-config").unwrap();
-    let ignore_ids = find_ignore_ids(&server_hint_config);
+    let server_hint_config = config.server;
+    let ignore_ids = find_ignore_ids(server_hint_config.ignoreids);
 //    println!("Ignored ids: {:?}", ignore_ids);
 
     // ignore servers on ignore list
@@ -606,8 +599,8 @@ fn run_test(number_of_tests: u64, file_name: Option<&str>,
                 None => {
                     // both server country and server country code are not set.
                     // look for closest servers - we should add a switch to avoid this distance check
-                    let client_conf = config.get("client").unwrap();
-                    let client_location = get_client_location(&client_conf);
+                    let client_conf = config.client;
+                    let client_location = (client_conf.lat, client_conf.lon);
                     let mut closest_servers: Vec<TestServerConfig> = Vec::new();
                     pick_closest_servers(client_location, &test_servers, &mut closest_servers);
                     closest_servers
@@ -654,14 +647,11 @@ fn run_test(number_of_tests: u64, file_name: Option<&str>,
             println!("");
 
             print!("Running upload tests...");
-            let upload_config = config.get("upload").unwrap();
-            let max_size = find_upload_max(&upload_config);
             record.push(chrono::Local::now().to_string());
             let (tx_total_bytes, tx_total_millis, tx_speed_in_mbps) = perform_upload_test(
                 best_server.url.as_str(),
-                &upload_config,
-                &sizes,
-                max_size);
+                &config.upload,
+                &sizes);
             record.push(tx_total_bytes.to_string());
             record.push(tx_total_millis.to_string());
             record.push(tx_speed_in_mbps.to_string());

@@ -15,8 +15,77 @@ pub struct FullConfig {
     pub client: ClientConfig,
     pub server: ServerConfig,
     pub download: DownloadConfig,
-    pub upload: UploadConfig
+    pub upload: UploadConfig,
+    pub parsing_succeeded: bool
 }
+
+impl FullConfig {
+    pub fn new() -> FullConfig {
+        let url = "http://www.speedtest.net/speedtest-config.php";
+        let mut client = Client::new();
+        client.set_redirect_policy(RedirectPolicy::FollowAll);
+        let mut headers = Headers::new();
+        headers.set(UserAgent("Hyper-speedtest".to_owned()));
+
+        let mut response = client.get(url)
+                            .headers(headers)
+                            .send();
+        let mut full_config = FullConfig::default();
+        full_config.parsing_succeeded = false;
+
+        match response {
+            Ok(res)    => {
+                let all_headers_wrapped = &res.headers.to_owned();
+                let default_content_len = ContentLength(0);
+                let content_length: &ContentLength = all_headers_wrapped.get().unwrap_or(&default_content_len);
+    //            println!("{:?}", content_length);
+                let no_content_length: u64 = 0;
+                if res.status == hyper::Ok && content_length.0 > no_content_length {
+
+                    let parser = EventReader::new(res);
+
+                    for e in parser {
+                        match e {
+                            Ok(XmlEvent::StartElement { name, attributes, .. }) => {
+                                if name.to_string() == "client".to_string() {
+                                    let client_config = build_config::<ClientConfig>(ClientConfig::default(), &attributes);
+                                    full_config.client = client_config;
+
+                                } else if name.to_string() == "server-config".to_string() {
+                                    let server_config = build_config::<ServerConfig>(ServerConfig::default(), &attributes);
+                                    full_config.server = server_config;
+
+                                } else if name.to_string() == "download".to_string() {
+                                    let download_config = build_config::<DownloadConfig>(DownloadConfig::default(), &attributes);
+                                    full_config.download = download_config;
+
+                                } else if name.to_string() == "upload".to_string() {
+                                    let upload_config = build_config::<UploadConfig>(UploadConfig::default(), &attributes);
+                                    full_config.upload = upload_config;
+                                }
+                            }
+                            Err(e) => {
+    //                            println!("Error parsing configuration XML");
+                            }
+                            _ => {}
+                        }
+                    }
+                    full_config.parsing_succeeded = true;
+    //                println!("{:?}", full_config);
+
+                } else {
+
+    //                println!("Cannot retrieve config data from server");
+                }
+            },
+            Err(e)      => {
+    //            println!("Error fetching config file - please try again");
+            }
+        }
+        full_config
+    }
+}
+
 
 #[derive(Debug, Default)]
 pub struct ClientConfig {
@@ -83,9 +152,32 @@ impl GenerateConfig<ClientConfig> for ClientConfig {
 #[derive(Debug, Default)]
 pub struct ServerConfig {
     pub threadcount: String,
-    pub ignoreids: String,
-    pub forcepingid: u64
+    pub ignoreids: String
 }
+
+
+impl GenerateConfig<ServerConfig> for ServerConfig {
+    fn from_xml(client_conf: &Vec<OwnedAttribute>) -> ServerConfig {
+        let mut threadcount = String::new();
+        let mut ignoreids = String::new();
+
+        for attrib in client_conf {
+            if attrib.name.to_string() == "threadcount".to_string() {
+                threadcount = attrib.value.to_string();
+
+            } else if attrib.name.to_string() == "ignoreids".to_string() {
+                ignoreids = attrib.value.to_string();
+            }
+        }
+
+        ServerConfig {
+            threadcount: threadcount,
+            ignoreids: ignoreids
+        }
+    }
+}
+
+
 
 #[derive(Debug, Default)]
 pub struct DownloadConfig {
@@ -95,6 +187,42 @@ pub struct DownloadConfig {
     pub threadsperurl: u64
 }
 
+
+impl GenerateConfig<DownloadConfig> for DownloadConfig {
+    fn from_xml(client_conf: &Vec<OwnedAttribute>) -> DownloadConfig {
+        let mut testlength: u64 = 0;
+        let mut initialtest = String::new();
+        let mut mintestsize = String::new();
+        let mut threadsperurl: u64 = 0;
+
+        for attrib in client_conf {
+            if attrib.name.to_string() == "initialtest".to_string() {
+                initialtest = attrib.value.to_string();
+
+            } else if attrib.name.to_string() == "testlength".to_string() {
+                let testlength_string = attrib.value.to_string();
+                testlength = testlength_string.parse::<u64>().unwrap_or(0);
+
+            } else if attrib.name.to_string() == "threadsperurl".to_string() {
+                let threadsperurl_string = attrib.value.to_string();
+                threadsperurl = threadsperurl_string.parse::<u64>().unwrap_or(0);
+
+            } else if attrib.name.to_string() == "mintestsize".to_string() {
+                mintestsize = attrib.value.to_string();
+
+            }
+        }
+
+        DownloadConfig {
+            testlength: testlength,
+            initialtest: initialtest,
+            mintestsize: mintestsize,
+            threadsperurl: threadsperurl
+        }
+    }
+}
+
+
 #[derive(Debug, Default)]
 pub struct UploadConfig {
     pub testlength: u64,
@@ -103,8 +231,66 @@ pub struct UploadConfig {
     pub mintestsize: String,
     pub threads: u64,
     pub maxchunksize: String,
-    pub maxchunkcount: String,
+    pub maxchunkcount: u64,
     pub threadsperurl: u64
+}
+
+
+impl GenerateConfig<UploadConfig> for UploadConfig {
+    fn from_xml(client_conf: &Vec<OwnedAttribute>) -> UploadConfig {
+        let mut testlength: u64 = 0;
+        let mut ratio: u64 = 0;
+        let mut initialtest = String::new();
+        let mut mintestsize = String::new();
+        let mut threads: u64 = 0;
+        let mut maxchunksize = String::new();
+        let mut maxchunkcount: u64 = 0;
+        let mut threadsperurl: u64 = 0;
+
+        for attrib in client_conf {
+            if attrib.name.to_string() == "testlength".to_string() {
+                let testlength_string = attrib.value.to_string();
+                testlength = testlength_string.parse::<u64>().unwrap_or(0);
+
+            } else if attrib.name.to_string() == "ratio".to_string() {
+                let ratio_string = attrib.value.to_string();
+                ratio = ratio_string.parse::<u64>().unwrap_or(0);
+
+            } else if attrib.name.to_string() == "initialtest".to_string() {
+                initialtest = attrib.value.to_string();
+
+            } else if attrib.name.to_string() == "mintestsize".to_string() {
+                mintestsize = attrib.value.to_string();
+
+            } else if attrib.name.to_string() == "threads".to_string() {
+                let threads_string = attrib.value.to_string();
+                threads = threads_string.parse::<u64>().unwrap_or(0);
+
+            } else if attrib.name.to_string() == "maxchunksize".to_string() {
+                maxchunksize = attrib.value.to_string();
+
+            } else if attrib.name.to_string() == "maxchunkcount".to_string() {
+                let maxchunkcount_string = attrib.value.to_string();
+                maxchunkcount = maxchunkcount_string.parse::<u64>().unwrap_or(0);
+
+            }  else if attrib.name.to_string() == "threadsperurl".to_string() {
+                let threadsperurl_string = attrib.value.to_string();
+                threadsperurl = threadsperurl_string.parse::<u64>().unwrap_or(0);
+
+            }
+        }
+
+        UploadConfig {
+            testlength: testlength,
+            ratio: ratio,
+            initialtest: initialtest,
+            mintestsize: mintestsize,
+            threads: threads,
+            maxchunksize: maxchunksize,
+            maxchunkcount: maxchunkcount,
+            threadsperurl: threadsperurl
+        }
+    }
 }
 
 
@@ -113,138 +299,6 @@ pub trait GenerateConfig<T> {
 }
 
 
-pub fn get_config_map() -> HashMap<String, Vec<OwnedAttribute>> {
-    let url = "http://www.speedtest.net/speedtest-config.php";
-    let mut client = Client::new();
-    client.set_redirect_policy(RedirectPolicy::FollowAll);
-    let mut headers = Headers::new();
-    headers.set(UserAgent("Hyper-speedtest".to_owned()));
-
-    let mut response = client.get(url)
-                        .headers(headers)
-                        .send();
-
-    let mut full_config: HashMap<String, Vec<OwnedAttribute>> = HashMap::new();
-//    let mut client_config: ClientConfig;
-//    println!("{:?}", response);
-
-    match response {
-        Ok(res)    => {
-            let all_headers_wrapped = &res.headers.to_owned();
-            let default_content_len = ContentLength(0);
-            let content_length: &ContentLength = all_headers_wrapped.get().unwrap_or(&default_content_len);
-//            println!("{:?}", content_length);
-            let no_content_length: u64 = 0;
-            if res.status == hyper::Ok && content_length.0 > no_content_length {
-
-                let parser = EventReader::new(res);
-
-
-                for e in parser {
-                    match e {
-                        Ok(XmlEvent::StartElement { name, attributes, .. }) => {
-
-                            if name.to_string() == "client".to_string() {
-                                full_config.insert(name.to_string(), attributes);
-
-                            } else if name.to_string() == "server-config".to_string() {
-                                full_config.insert(name.to_string(), attributes);
-
-                            } else if name.to_string() == "download".to_string() {
-                                full_config.insert(name.to_string(), attributes);
-
-                            } else if name.to_string() == "upload".to_string() {
-                                full_config.insert(name.to_string(), attributes);
-                            }
-                        }
-                        Err(e) => {
-//                            println!("Error parsing configuration XML");
-                        }
-                        _ => {}
-                    }
-                }
-//                println!("{:?}", full_config);
-
-            } else {
-
-//                println!("Cannot retrieve config data from server");
-            }
-        },
-        Err(e)      => {
-//            println!("Error fetching config file - please try again");
-        }
-    }
-
-    full_config
-}
-
-
-pub fn get_config() -> () {
-    let url = "http://www.speedtest.net/speedtest-config.php";
-    let mut client = Client::new();
-    client.set_redirect_policy(RedirectPolicy::FollowAll);
-    let mut headers = Headers::new();
-    headers.set(UserAgent("Hyper-speedtest".to_owned()));
-
-    let mut response = client.get(url)
-                        .headers(headers)
-                        .send();
-    let mut client_config = ClientConfig::default();
-
-    match response {
-        Ok(res)    => {
-            let all_headers_wrapped = &res.headers.to_owned();
-            let default_content_len = ContentLength(0);
-            let content_length: &ContentLength = all_headers_wrapped.get().unwrap_or(&default_content_len);
-//            println!("{:?}", content_length);
-            let no_content_length: u64 = 0;
-            if res.status == hyper::Ok && content_length.0 > no_content_length {
-
-                let parser = EventReader::new(res);
-
-                for e in parser {
-                    match e {
-                        Ok(XmlEvent::StartElement { name, attributes, .. }) => {
-                            if name.to_string() == "client".to_string() {
-//                                full_config.insert(name.to_string(), attributes);
-                                client_config = ClientConfig::from_xml(&attributes);
-                            }
-                        }
-                        Err(e) => {
-//                            println!("Error parsing configuration XML");
-                        }
-                        _ => {}
-                    }
-                }
-//                println!("{:?}", full_config);
-
-            } else {
-
-//                println!("Cannot retrieve config data from server");
-            }
-        },
-        Err(e)      => {
-//            println!("Error fetching config file - please try again");
-        }
-    }
-}
-
-
-fn build_full_config<T: GenerateConfig>(name: String, attribs: &Vec<OwnedAttribute>) -> Option<T> {
-
-    if name.to_string() == "client".to_string() {
-        return ClientConfig::from_xml(&attribs);
-
-    }
-
-//        else if name.to_string() == "server-config".to_string() {
-//        full_config.insert(name.to_string(), attributes);
-//
-//    } else if name.to_string() == "download".to_string() {
-//        full_config.insert(name.to_string(), attributes);
-//
-//    } else if name.to_string() == "upload".to_string() {
-//        full_config.insert(name.to_string(), attributes);
-//    }
-
+fn build_config<T: GenerateConfig<T> + Default>(type_: T, attribs: &Vec<OwnedAttribute>) -> T {
+    T::from_xml(&attribs)
 }
