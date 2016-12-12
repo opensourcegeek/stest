@@ -49,45 +49,6 @@ struct TestServerConfig {
 }
 
 
-#[derive(Debug)]
-struct ClientConfig {
-    pub ip: String,
-    pub lat: f32,
-    pub lon: f32,
-    pub isp: String,
-    pub isprating: f32,
-    pub ispdlavg: u64,
-    pub ispulavg: u64
-}
-
-#[derive(Debug)]
-struct ServerConfig {
-    pub threadcount: String,
-    pub ignoreids: String,
-    pub forcepingid: u64
-}
-
-#[derive(Debug)]
-struct DownloadConfig {
-    pub testlength: u64,
-    pub initialtest: String,
-    pub mintestsize: String,
-    pub threadsperurl: u64
-}
-
-#[derive(Debug)]
-struct UploadConfig {
-    pub testlength: u64,
-    pub ratio: u64,
-    pub initialtest: String,
-    pub mintestsize: String,
-    pub threads: u64,
-    pub maxchunksize: String,
-    pub maxchunkcount: String,
-    pub threadsperurl: u64
-}
-
-
 fn get_all_test_servers() -> Vec<TestServerConfig> {
     let urls = vec![
         "http://www.speedtest.net/speedtest-servers-static.php",
@@ -378,7 +339,7 @@ fn compute_speed_in_mbps(total_bytes: u64, total_time_in_millis: u64) -> f64 {
 }
 
 
-fn perform_download_test(server_url_str: &str, sizes: &Vec<u64>, dimensions: &Vec<u64>) -> (u64, u64, f64) {
+fn perform_download_test(server_url_str: &str, dimensions: &Vec<u64>) -> (u64, u64, f64) {
     let mut urls: Vec<String> = Vec::new();
     let mut counter = 0;
 
@@ -475,17 +436,62 @@ fn perform_download_test(server_url_str: &str, sizes: &Vec<u64>, dimensions: &Ve
 }
 
 
-fn perform_upload_test(server_url_str: &str, sizes: &Vec<u64>, max_size: u64) -> (u64, u64, f64) {
+fn perform_upload_test(server_url_str: &str,
+                       client_conf: &Vec<OwnedAttribute>,
+                       sizes: &Vec<u64>,
+                       max_size: u64) -> (u64, u64, f64) {
     let mut thread_handles = vec![];
     let start = time::Instant::now();
+    let ratio = 1;
+
+//    for attrib in client_conf {
+//        if attrib.name.to_string() == "ratio".to_string() {
+//            ratio = attrib.value.to_string();
+//        }
+//    }
+
+
+//    ratio = int(upload['ratio'])
+//        upload_max = int(upload['maxchunkcount'])
+//        up_sizes = [32768, 65536, 131072, 262144, 524288, 1048576, 7340032]
+//        sizes = {
+//            'upload': up_sizes[ratio - 1:],
+//            'download': [350, 500, 750, 1000, 1500, 2000, 2500,
+//                         3000, 3500, 4000]
+//        }
+//
+//        counts = {
+//            'upload': int(upload_max * 2 / len(sizes['upload'])),
+//            'download': int(download['threadsperurl'])
+//        }
+//
+//        threads = {
+//            'upload': int(upload['threads']),
+//            'download': int(server_config['threadcount']) * 2
+//        }
+//
+//        length = {
+//            'upload': int(upload['testlength']),
+//            'download': int(download['testlength'])
+//        }
+//
+//        self.config.update({
+//            'client': client,
+//            'ignore_servers': ignore_servers,
+//            'sizes': sizes,
+//            'counts': counts,
+//            'threads': threads,
+//            'length': length,
+//            'upload_max': upload_max
+//        })
 
     for s in sizes {
         let full_size = s.clone();
+
         let upload_url = server_url_str.to_string();
         let handle = thread::spawn(move || {
-            // 16K is a factor of all sizes so using that
-            let sixteen_kb = 1024 * 16;
-            let num_cycles = max_size / sixteen_kb;
+            let mut total_bytes_uploaded = 0;
+
             let mut buff: Vec<u8> = vec![0; full_size as usize];
             let mut client = Client::new();
             client.set_redirect_policy(RedirectPolicy::FollowAll);
@@ -493,35 +499,25 @@ fn perform_upload_test(server_url_str: &str, sizes: &Vec<u64>, max_size: u64) ->
             let mut headers = Headers::new();
             headers.set(UserAgent("Hyper-speedtest".to_owned()));
 
-            let mut total_bytes_uploaded = 0;
-
-            for current in 0..num_cycles {
-
-                if start.elapsed().as_secs() >= 10 {
-                    // if it's taken more than 10 seconds
-                    // since thread started we break.
-                    break;
-                }
-
-                let mut response = client.post(upload_url.as_str())
-                                .body(Body::BufBody(&buff, sixteen_kb as usize))
+            let mut response = client.post(upload_url.as_str())
+                                .body(Body::BufBody(&buff, full_size as usize))
                                 .headers(headers.clone())
                                 .send();
 
-                match response {
-                    Ok(res)     => {
-    //                    println!("{:?}", res);
-                        print!(".");
-                        io::stdout().flush().ok().expect("");
-                        total_bytes_uploaded = total_bytes_uploaded + sixteen_kb;
-                    },
-                    Err(e)       => {}
-                }
-
+            match response {
+                Ok(res)     => {
+                    //println!("{:?}", res);
+                    print!(".");
+                    io::stdout().flush().ok().expect("");
+                },
+                Err(e)       => {}
             }
+            println!("Total bytes uploaded {}", full_size);
+            total_bytes_uploaded = total_bytes_uploaded + full_size;
             total_bytes_uploaded
 
         });
+
         thread_handles.push(handle);
     }
 
@@ -540,13 +536,6 @@ fn perform_upload_test(server_url_str: &str, sizes: &Vec<u64>, max_size: u64) ->
     (total_upload_bytes, elapsed_as_millis, speed_in_mbps)
 
 }
-
-
-//fn filter_server_list_by_country_name_or_code(test_servers: &Vec<TestServerConfig>,
-//        server_country: Option<&str>,
-//        server_countr_code: Option<&str>) {
-//
-//}
 
 
 fn run_test(number_of_tests: u64, file_name: Option<&str>,
@@ -657,7 +646,7 @@ fn run_test(number_of_tests: u64, file_name: Option<&str>,
             // run in separate threads
             print!("Running download tests...");
             record.push(chrono::Local::now().to_string());
-            let (rx_total_bytes, rx_total_millis, rx_speed_in_mbps) = perform_download_test(server_url_str, &sizes, &dimensions);
+            let (rx_total_bytes, rx_total_millis, rx_speed_in_mbps) = perform_download_test(server_url_str, &dimensions);
             record.push(rx_total_bytes.to_string());
             record.push(rx_total_millis.to_string());
             record.push(rx_speed_in_mbps.to_string());
@@ -670,6 +659,7 @@ fn run_test(number_of_tests: u64, file_name: Option<&str>,
             record.push(chrono::Local::now().to_string());
             let (tx_total_bytes, tx_total_millis, tx_speed_in_mbps) = perform_upload_test(
                 best_server.url.as_str(),
+                &upload_config,
                 &sizes,
                 max_size);
             record.push(tx_total_bytes.to_string());
