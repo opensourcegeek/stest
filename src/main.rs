@@ -10,6 +10,7 @@ mod args;
 mod file_utils;
 mod geo;
 mod config;
+mod upload_data;
 
 use std::io::Read;
 use std::collections::{HashMap, BTreeMap};
@@ -434,78 +435,50 @@ fn perform_upload_test(server_url_str: &str,
                        sizes: &Vec<u64>) -> (u64, u64, f64) {
     let mut thread_handles = vec![];
     let start = time::Instant::now();
-    let ratio = 1;
+    let ratio = client_conf.ratio;
+    let max_chunk_count = client_conf.maxchunkcount;
+    let size_max = (ratio - 1) as usize;
+    let upload_sizes: Vec<&u64> = sizes.into_iter().skip(size_max).collect();
+    let upload_count = ((max_chunk_count * 2) / upload_sizes.len() as u64) as u64;
+    let upload_threads = client_conf.threads;
+    let upload_length = client_conf.testlength;
 
-//    for attrib in client_conf {
-//        if attrib.name.to_string() == "ratio".to_string() {
-//            ratio = attrib.value.to_string();
-//        }
-//    }
-
-
-//    ratio = int(upload['ratio'])
-//        upload_max = int(upload['maxchunkcount'])
-//        up_sizes = [32768, 65536, 131072, 262144, 524288, 1048576, 7340032]
-//        sizes = {
-//            'upload': up_sizes[ratio - 1:],
-//            'download': [350, 500, 750, 1000, 1500, 2000, 2500,
-//                         3000, 3500, 4000]
-//        }
-//
-//        counts = {
-//            'upload': int(upload_max * 2 / len(sizes['upload'])),
-//            'download': int(download['threadsperurl'])
-//        }
-//
-//        threads = {
-//            'upload': int(upload['threads']),
-//            'download': int(server_config['threadcount']) * 2
-//        }
-//
-//        length = {
-//            'upload': int(upload['testlength']),
-//            'download': int(download['testlength'])
-//        }
-//
-//        self.config.update({
-//            'client': client,
-//            'ignore_servers': ignore_servers,
-//            'sizes': sizes,
-//            'counts': counts,
-//            'threads': threads,
-//            'length': length,
-//            'upload_max': upload_max
-//        })
+    println!("{:?}", upload_sizes);
 
     for s in sizes {
         let full_size = s.clone();
-
         let upload_url = server_url_str.to_string();
+        let num_cycles = full_size / (8 * 1024);
+
         let handle = thread::spawn(move || {
             let mut total_bytes_uploaded = 0;
 
             let mut buff: Vec<u8> = vec![0; full_size as usize];
             let mut client = Client::new();
             client.set_redirect_policy(RedirectPolicy::FollowAll);
+            client.set_write_timeout(Some(time::Duration::from_secs(5)));
 
             let mut headers = Headers::new();
             headers.set(UserAgent("Hyper-speedtest".to_owned()));
 
-            let mut response = client.post(upload_url.as_str())
-                                .body(Body::BufBody(&buff, full_size as usize))
-                                .headers(headers.clone())
-                                .send();
+            let mut buffered = upload_data::UploadData::new(full_size, 10);
+            {
+                let mut response = client.post(upload_url.as_str())
+                                    //.body(Body::BufBody(&buff, full_size as usize))
+                                    .body(Body::ChunkedBody(&mut buffered))
+                                    .headers(headers.clone())
+                                    .send();
 
-            match response {
-                Ok(res)     => {
-                    //println!("{:?}", res);
-                    print!(".");
-                    io::stdout().flush().ok().expect("");
-                },
-                Err(e)       => {}
+                match response {
+                    Ok(res)     => {
+    //                    println!("{:?}", res);
+                        print!(".");
+                        io::stdout().flush().ok().expect("");
+                    },
+                    Err(e)       => { println!("{:?}", e) }
+                }
             }
-//            println!("Total bytes uploaded {}", full_size);
-            total_bytes_uploaded = total_bytes_uploaded + full_size;
+            total_bytes_uploaded = total_bytes_uploaded + buffered.current_size;
             total_bytes_uploaded
 
         });
