@@ -31,19 +31,45 @@ impl Read for UploadData {
 //        println!("Data sent {:?}", data_to_send);
         let elapsed = self.start_time.elapsed();
         let elapsed_in_millis = (elapsed.as_secs() * 1_000) + (elapsed.subsec_nanos() / 1_000_000) as u64;
-        if data_to_send > 0 && (elapsed_in_millis <= self.timeout_in_sec * 1000) {
-            for i in 0..constant_buf_size {
-                buf[i as usize] = 0;
-            }
-//            println!("Returned data {:?}", buf.len());
-            self.current_size = self.current_size + constant_buf_size;
-            return Ok(constant_buf_size as usize);
+//        println!("Elapsed {:?} and {:?}", elapsed_in_millis, self.timeout_in_sec * 1000);
+        if elapsed_in_millis < self.timeout_in_sec * 1000 {
+            if data_to_send > 0 {
+                for i in 0..constant_buf_size {
+                    buf[i as usize] = 0;
+                }
+    //            println!("Returned data {:?}", buf.len());
+                self.current_size = self.current_size + constant_buf_size;
+                return Ok(constant_buf_size as usize);
 
-        } else if data_to_send >= 0 {
-            return Ok(0 as usize);
+            } else {
+                return Ok(0 as usize);
+            }
 
         } else {
-            return Err(Error::new(ErrorKind::Other, "Error sending upload data"));
+            // Times up - so return an error..
+            return Err(Error::new(ErrorKind::Other, "Error sending upload data - times up"));
         }
     }
+}
+
+#[cfg(test)]
+mod test {
+
+    use super::UploadData;
+    use std::io::Read;
+
+    /*
+    #[test]
+    fn test_read_data() -> () {
+        let total_data = 8192 * 4; // 32KB
+        let mut buffered = UploadData::new(total_data, 1);
+        for i in 0..4 {
+            let mut data_read = Vec::with_capacity(8192 as usize);
+            buffered.read(&mut data_read);
+        }
+
+
+    }
+    */
+
 }

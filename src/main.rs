@@ -443,7 +443,7 @@ fn perform_upload_test(server_url_str: &str,
     let upload_threads = client_conf.threads;
     let upload_length = client_conf.testlength;
 
-    println!("{:?}", upload_sizes);
+//    println!("{:?}", upload_sizes);
 
     for s in sizes {
         let full_size = s.clone();
@@ -453,7 +453,6 @@ fn perform_upload_test(server_url_str: &str,
         let handle = thread::spawn(move || {
             let mut total_bytes_uploaded = 0;
 
-            let mut buff: Vec<u8> = vec![0; full_size as usize];
             let mut client = Client::new();
             client.set_redirect_policy(RedirectPolicy::FollowAll);
             client.set_write_timeout(Some(time::Duration::from_secs(5)));
