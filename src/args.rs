@@ -20,6 +20,10 @@ pub fn parse_args<'a>() -> ArgMatches<'a> {
             .value_name("csv")
             .help("Set name of csv file")
             .takes_value(true))
+        .arg(Arg::with_name("use_cached")
+            .short("u")
+            .long("use-cached")
+            .help("Use a cached copy of servers"))
         .args_from_usage(
             "-s --server-country [server_country] 'This will scan servers only from given country name - it might take a while before it finds the best server'
              -o --server-country-code [server_country_code]  'This will scan servers only from given country code - it might take a while before it finds the best server'")

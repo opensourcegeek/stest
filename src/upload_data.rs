@@ -1,8 +1,8 @@
-
 use std::io::Read;
 use std::time::Instant;
 use std::io::Result;
 use std::io::{Error, ErrorKind};
+
 
 pub struct UploadData {
     pub total_data_size: u64,
@@ -25,20 +25,20 @@ impl UploadData {
 
 
 impl Read for UploadData {
+    /// This is called from ChunkedBody post request. It stops sending data
+    /// when it's elapsed given timeout thereby triggering end of body POST'ed
+    /// to server.
     fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
-//        println!("Trying to fill in data {:?}", buf.len());
         let constant_buf_size: u64 = 8192;
         let data_to_send = self.total_data_size - self.current_size;
-//        println!("Data sent {:?}", data_to_send);
         let elapsed = self.start_time.elapsed();
         let elapsed_in_millis = (elapsed.as_secs() * 1_000) + (elapsed.subsec_nanos() / 1_000_000) as u64;
-//        println!("Elapsed {:?} and {:?}", elapsed_in_millis, self.timeout_in_sec * 1000);
+
         if elapsed_in_millis < self.timeout_in_sec * 1000 {
             if data_to_send > 0 {
                 for i in 0..constant_buf_size {
                     buf[i as usize] = 0;
                 }
-    //            println!("Returned data {:?}", buf.len());
                 self.current_size = self.current_size + constant_buf_size;
                 return Ok(constant_buf_size as usize);
 

@@ -30,148 +30,12 @@ use xml::reader::{EventReader, XmlEvent};
 use xml::attribute::OwnedAttribute;
 use url::{Url, Host};
 
+use config::TestServerConfig;
+
 const MAX_NUM_RETRIES: u64      = 10;
 const ONE_SEC_IN_MILLIS: u64    = 1000;
 
 const CSV_COLUMN_NAMES: &'static str = "test_number,server_url,rx_start,rx_total_bytes,rx_total_millis,rx_speed_mbps,rx_end,tx_start,tx_total_bytes,tx_total_millis,tx_speed_mbps,tx_end";
-
-
-#[derive(Debug)]
-struct TestServerConfig {
-    pub url: String,
-    pub latitude: f32,
-    pub longitude: f32,
-    pub name: String,
-    pub country: String,
-    pub country_code: String,
-    pub id: u64,
-    pub url2: String,
-    pub host: String
-}
-
-
-fn get_all_test_servers() -> Vec<TestServerConfig> {
-    let urls = vec![
-        "http://www.speedtest.net/speedtest-servers-static.php",
-        "http://c.speedtest.net/speedtest-servers-static.php",
-        "http://www.speedtest.net/speedtest-servers.php",
-        "http://c.speedtest.net/speedtest-servers.php"
-    ];
-
-    let mut all_test_servers: Vec<TestServerConfig> = Vec::new();
-
-    for url in urls {
-        let mut client = Client::new();
-        client.set_redirect_policy(RedirectPolicy::FollowAll);
-
-        let mut headers = Headers::new();
-        headers.set(UserAgent("Hyper-speedtest".to_owned()));
-        let mut response = client.get(url)
-                                .headers(headers)
-                                .send();
-
-        match response {
-            Ok(res)    => {
-                let all_headers_wrapped = &res.headers.to_owned();
-                let content_length: &ContentLength = all_headers_wrapped.get().unwrap();
-//                println!("{:?}", content_length);
-                let no_content_length: u64 = 0;
-                if res.status == hyper::Ok && content_length.0 > no_content_length {
-                    let parser = EventReader::new(res);
-                    for e in parser {
-                        match e {
-                            Ok(XmlEvent::StartElement { name, attributes, .. }) => {
-                                if name.to_string() == "server".to_string() {
-//                                    println!("{:?}", attributes);
-                                    let mut url: String = String::new();
-                                    let mut latitude: f32 = 0.0;
-                                    let mut longitude: f32 = 0.0;
-                                    let mut name: String = String::new();
-                                    let mut country: String = String::new();
-                                    let mut country_code: String = String::new();
-                                    let mut id: u64 = 0;
-                                    let mut url2: String = String::new();
-                                    let mut host: String = String::new();
-
-                                    for attribute in attributes {
-                                        let att_name = attribute.name.to_string();
-                                        let att_value = &attribute.value;
-                                        
-                                        if att_name == "url".to_string() {
-                                            url = att_value.to_string();
-                                        }
-
-                                        if att_name == "lat".to_string() {
-                                            latitude = att_value.parse::<f32>().unwrap();
-                                        }
-
-                                        if att_name == "lon".to_string() {
-                                            longitude = att_value.parse::<f32>().unwrap();
-                                        }
-
-                                        if att_name == "name".to_string() {
-                                            name = att_value.to_string();
-                                        }
-
-                                        if att_name == "country".to_string() {
-                                            country = att_value.to_string();
-                                        }
-
-                                        if att_name == "cc".to_string() {
-                                            country_code = att_value.to_string();
-                                        }
-
-                                        if att_name == "id".to_string() {
-                                            id = att_value.parse::<u64>().unwrap();
-                                        }
-
-                                        if att_name == "url2".to_string() {
-                                            url2 = att_value.to_string();
-                                        }
-
-                                        if att_name == "host".to_string() {
-                                            host = att_value.to_string();
-                                        }
-                                    }
-
-                                    all_test_servers.push(TestServerConfig {
-                                        url: url,
-                                        id: id,
-                                        url2: url2,
-                                        host: host,
-                                        country: country,
-                                        country_code: country_code,
-                                        latitude: latitude,
-                                        longitude: longitude,
-                                        name: name
-                                    })
-
-                                }
-                            }
-                            Err(e) => {
-                                println!("Error parsing configuration XML");
-                                continue;
-                            }
-                            _ => {}
-                        }
-                    }
-
-                    // We got all data so no need to loop through all of the urls.
-                    break;
-
-                } else {
-                    println!("Cannot retrieve config data from server");
-                }
-            },
-            Err(e)      => {
-                println!("Error fetching config file - please try again {}", url);
-            }
-
-        }
-
-    }
-    all_test_servers
-}
 
 
 fn pick_closest_servers(client_location: (f32, f32),
@@ -434,7 +298,7 @@ fn perform_upload_test(server_url_str: &str,
                         print!(".");
                         io::stdout().flush().ok().expect("");
                     },
-                    Err(e)       => { println!("{:?}", e) }
+                    Err(e)       => {}
                 }
             }
             total_bytes_uploaded = total_bytes_uploaded + buffered.current_size;
@@ -464,7 +328,8 @@ fn perform_upload_test(server_url_str: &str,
 
 fn run_test(number_of_tests: u64, file_name: Option<&str>,
             server_country: Option<&str>,
-            server_country_code: Option<&str>) {
+            server_country_code: Option<&str>,
+            use_cached_servers: bool) {
     // The speed test config file request returns nothing sometimes, but it looks like a
     // glitch on the server side as similar content-length:0 responses come back when queried
     // using curl as well. To work around it we retry upto MAX_NUM_RETRIES, it should come in
@@ -480,7 +345,7 @@ fn run_test(number_of_tests: u64, file_name: Option<&str>,
 //    println!("{:?}", config);
     // TODO: Add a check to exit if we cannot retrieve any config
 
-    let mut test_servers: Vec<TestServerConfig> = get_all_test_servers();
+    let mut test_servers: Vec<TestServerConfig> = config::get_all_test_servers(use_cached_servers);
     println!("Total servers available: {:?}", test_servers.len());
 
     let server_hint_config = config.server;
@@ -622,6 +487,8 @@ fn main() {
     let csv_file_name = matches.value_of("csv");
     let server_country = matches.value_of("server-country");
     let server_country_code = matches.value_of("server-country-code");
+    let use_cached_servers = matches.is_present("use_cached");
+
     let mut n_tests: u64 = 1;
 
     match number_of_tests {
@@ -636,5 +503,5 @@ fn main() {
     println!("Number of tests to run {}", n_tests);
 //    println!("CSV file name {:?}", csv_file_name);
 //    println!("Server country - {:?} code - {:?}", server_country, server_country_code);
-    run_test(n_tests, csv_file_name, server_country, server_country_code);
+    run_test(n_tests, csv_file_name, server_country, server_country_code, use_cached_servers);
 }
