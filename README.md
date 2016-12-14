@@ -2,10 +2,16 @@ speedtest (stest)
 =================
 
 
-This is a port of https://github.com/sivel/speedtest-cli into rust, as I need to have no runtime dependencies. And I'm not planning to support all the arguments used in original tool.
-I'd like to add support for most platforms as a single stand alone binary that could work out of the box.
+This is a port of [speedtest-cli](https://github.com/sivel/speedtest-cli) into rust, to avoid having runtime dependencies. Currently not all the arguments are supported. I'd like to add support for most platforms but targeting only linux for now. Ideally it will be a single stand alone binary that will work out of the box.
 
-![Alt Text](https://github.com/opensourcegeek/stest/raw/master/stest-i686.gif)
+![Speed test gif](https://github.com/opensourcegeek/stest/raw/master/stest-i686.gif)
+
+
+Download
+--------
+
+Download the binaries 'stest-i686-linux' for 32-bit or 'stest-x86_64-linux' for 64-bit linux from [releases](https://github.com/opensourcegeek/stest/releases) for most recent version. These are the only supported platforms for the moment.
+
 
 Usage
 -----
@@ -33,6 +39,6 @@ OPTIONS:
 to-do
 -----
 
-   - Add a switch to use local cache for servers to avoid downloading each time. 
+   - Add a switch to use local cache for servers to avoid downloading each time.
    - Add command line switches to use specific server, override geo-ip lookup.
    - Add command line argument to run in server mode (no security) again rendering CSV/JSON file. I'm thinking websocket but not sure!
