@@ -396,7 +396,7 @@ fn run_test(number_of_tests: u64, file_name: Option<&str>,
                 None => {
                     // both server country and server country code are not set.
                     // look for closest servers - we should add a switch to avoid this distance check
-                    let client_conf = config.client;
+                    let client_conf = &config.client;
                     let client_location = (client_conf.lat, client_conf.lon);
                     let mut closest_servers: Vec<TestServerConfig> = Vec::new();
                     pick_closest_servers(client_location, &test_servers, &mut closest_servers);
@@ -408,6 +408,7 @@ fn run_test(number_of_tests: u64, file_name: Option<&str>,
     };
 
 
+    println!("Your address {:?} and ISP {:?}", config.client.ip, config.client.isp);
     if closest_servers.len() > 0 {
         // TODO: May be change the server for each test?
         // look for ping latency for all servers (or closest servers)
