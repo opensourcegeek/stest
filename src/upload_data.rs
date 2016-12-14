@@ -58,19 +58,36 @@ mod test {
 
     use super::UploadData;
     use std::io::Read;
+    use std::{time, thread};
 
-    /*
     #[test]
     fn test_read_data() -> () {
         let total_data = 8192 * 4; // 32KB
         let mut buffered = UploadData::new(total_data, 1);
         for i in 0..4 {
-            let mut data_read = Vec::with_capacity(8192 as usize);
+            let mut data_read: Vec<u8> = vec![1; 8192];
             buffered.read(&mut data_read);
         }
-
-
+        assert!(buffered.current_size == total_data);
     }
-    */
+
+    #[test]
+    fn test_timed_out_read_data() -> () {
+        let total_data = 8192 * 4; // 32KB
+        let mut buffered = UploadData::new(total_data, 1);
+        for i in 0..4 {
+            let mut data_read: Vec<u8> = vec![1; 8192];
+            thread::sleep(time::Duration::from_secs(2));
+            let read_response = buffered.read(&mut data_read);
+            match read_response {
+                Ok(_)   => {println!("Read data fine")},
+                Err(e)  => {
+                    println!("Timed out");
+                    break;
+                }
+            }
+        }
+        assert!(buffered.current_size == 0);
+    }
 
 }

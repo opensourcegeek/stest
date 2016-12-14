@@ -335,7 +335,7 @@ fn perform_download_test(server_url_str: &str, dimensions: &Vec<u64>) -> (u64, u
                                 break;
                             }
 
-                            let mut buf: Vec<u8> = vec![0; 10240];
+                            let mut buf: Vec<u8> = vec![0; 8192];
                             let size = res.read(&mut buf);
                             match size {
                                 Ok(s)   => {
