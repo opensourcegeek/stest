@@ -1,7 +1,7 @@
 [package]
 name = "stest"
-version = "0.3.0"
-authors = ["opensourcegeek <praveen.kumar@nomadrail.com>"]
+version = "0.4.0"
+authors = ["opensourcegeek <3.pravin@gmail.com>"]
 
 [features]
 ssl = ["hyper/ssl"]

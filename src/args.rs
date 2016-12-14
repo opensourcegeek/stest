@@ -1,10 +1,12 @@
 
 use clap::{Arg, App, ArgMatches, SubCommand, ArgGroup};
+use clap::*;
+
 
 pub fn parse_args<'a>() -> ArgMatches<'a> {
     let matches = App::new("stest (speedtest cli)")
-        .version("0.3.0")
-        .author("opensourcegeek. <3.pravin@gmail.com>")
+        .version(crate_version!())
+        .author(crate_authors!())
         .about("A command line utility to run speedtest similar to http://speedtest.net")
         .arg(Arg::with_name("number_tests")
             .short("n")

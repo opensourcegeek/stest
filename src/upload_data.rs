@@ -11,6 +11,7 @@ pub struct UploadData {
     pub current_size: u64
 }
 
+
 impl UploadData {
     pub fn new(n: u64, timeout_secs: u64) -> UploadData {
         UploadData {
