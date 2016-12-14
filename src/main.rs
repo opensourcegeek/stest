@@ -228,46 +228,6 @@ fn find_ignore_ids(ids_str: String) -> Vec<u64> {
 }
 
 
-fn find_upload_max(client_conf: &Vec<OwnedAttribute>) -> u64 {
-
-    for attrib in client_conf {
-        if attrib.name.to_string() == "maxchunksize".to_string() {
-            let upload_max = attrib.value.to_string();
-            if upload_max.contains("K") {
-                // upload max is in KB - convert it to bytes
-                let res = upload_max.trim_matches('K');
-                // default to 32K if we cannot get the actual number!
-                return res.parse::<u64>().unwrap_or(32) * 1024;
-
-            } else if upload_max.contains("M") {
-                // upload max is in MB - convert it to bytes
-                let res = upload_max.trim_matches('M');
-                // default to 1 MB if we cannot get the actual number!
-                return res.parse::<u64>().unwrap_or(1) * 1024 * 1024;
-            }
-
-        }
-    }
-    // default is 32KB
-    32768
-}
-
-
-fn get_client_location(ref client_conf: &Vec<OwnedAttribute>) -> (Option<f32>, Option<f32>) {
-    let mut latitude: Option<f32> = Option::None;
-    let mut longitude: Option<f32> = Option::None;
-    for attrib in  *client_conf {
-        if attrib.name.to_string() == "lat".to_string() {
-            latitude = Option::Some(attrib.value.parse::<f32>().unwrap());
-
-        } else if attrib.name.to_string() == "lon".to_string() {
-            longitude = Option::Some(attrib.value.parse::<f32>().unwrap());
-        }
-    }
-    (latitude, longitude)
-}
-
-
 fn find_best_server_by_ping(test_servers: &Vec<TestServerConfig>)
     -> &TestServerConfig {
     let mut server_responses: BTreeMap<u64, &TestServerConfig> = BTreeMap::new();
