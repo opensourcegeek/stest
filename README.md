@@ -16,29 +16,32 @@ Download the binaries 'stest-i686-linux' for 32-bit or 'stest-x86_64-linux' for 
 Usage
 -----
 
-Supported options given below. Argument parsing is powered by awesome https://github.com/kbknapp/clap-rs
+Supported options given below. Argument parsing is powered by awesome [clap-rs](https://github.com/kbknapp/clap-rs)
 
 ```
 USAGE:
-    stest [OPTIONS]
+    stest [FLAGS] [OPTIONS]
 
 FLAGS:
-    -h, --help       Prints help information
-    -V, --version    Prints version information
+    -h, --help          Prints help information
+    -u, --use-cached    Use a cached copy of servers
+    -V, --version       Prints version information
 
 OPTIONS:
     -c, --csv <csv>                                    Set name of csv file
     -n, --number-tests <number_tests>                  Sets number of tests to run
     -s, --server-country <server_country>
-            This will scan servers only from given country name - it might take a while before it finds the best server
+            This will scan servers only from given country name - it might take a while before it
+            finds the best server
     -o, --server-country-code <server_country_code>
-            This will scan servers only from given country code - it might take a while before it finds the best server
+            This will scan servers only from given country code - it might take a while before it
+            finds the best server
+
 ```
 
 
 to-do
 -----
 
-   - Add a switch to use local cache for servers to avoid downloading each time.
    - Add command line switches to use specific server, override geo-ip lookup.
    - Add command line argument to run in server mode (no security) again rendering CSV/JSON file. I'm thinking websocket but not sure!
