@@ -5,6 +5,7 @@ extern crate time as ext_time;
 extern crate csv;
 extern crate clap;
 extern crate chrono;
+extern crate rand;
 
 mod args;
 mod file_utils;
