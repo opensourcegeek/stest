@@ -105,7 +105,7 @@ mod test {
             println!("{}", val);
             buf[i as usize] = val as u8;
         }
-        assert!(10 == buf.len());
+        assert!(10 == buf.len() * std::mem::size_of::<u8>());
     }
 
 }
