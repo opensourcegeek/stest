@@ -268,12 +268,20 @@ fn perform_upload_test(server_url_str: &str,
     let upload_threads = client_conf.threads;
     let upload_length = client_conf.testlength;
 
+    let mut all_sizes: Vec<u64> = Vec::new();
+    for size in upload_sizes {
+        for _ in 0..upload_count {
+            all_sizes.push(*size);
+        }
+    }
+
+    let picked_sizes = all_sizes.into_iter().take(max_chunk_count as usize);
+
 //    println!("{:?}", upload_sizes);
 
-    for s in sizes {
+    for s in picked_sizes {
         let full_size = s.clone();
         let upload_url = server_url_str.to_string();
-        let num_cycles = full_size / (8 * 1024);
 
         let handle = thread::spawn(move || {
             let mut total_bytes_uploaded = 0;

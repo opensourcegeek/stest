@@ -2,7 +2,8 @@ use std::io::Read;
 use std::time::Instant;
 use std::io::Result;
 use std::io::{Error, ErrorKind};
-use rand::{thread_rng, Rng};
+use rand;
+use rand::{thread_rng, Rng, AsciiGenerator};
 
 
 pub struct UploadData {
@@ -30,29 +31,32 @@ impl Read for UploadData {
     /// when it's elapsed given timeout thereby triggering end of body POST'ed
     /// to server.
     fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
-        let buf_size: u64 = buf.len() as u64;
-        let mut generator = thread_rng();
-        let chars = generator.gen_ascii_chars().take(buf_size as usize);
-        let data_to_send = self.total_data_size - self.current_size;
         let elapsed = self.start_time.elapsed();
         let elapsed_in_millis = (elapsed.as_secs() * 1_000) + (elapsed.subsec_nanos() / 1_000_000) as u64;
 
-        if elapsed_in_millis < self.timeout_in_sec * 1000 {
-            if data_to_send > 0 {
-                for (i, val) in chars.enumerate() {
-                    buf[i as usize] = val as u8;
-                }
-                self.current_size = self.current_size + buf_size;
-                return Ok(buf_size as usize);
-
-            } else {
-                return Ok(0 as usize);
-            }
-
-        } else {
+        if elapsed_in_millis >= self.timeout_in_sec * 1000 {
             // Times up - so return an error..
             return Err(Error::new(ErrorKind::Other, "Error sending upload data - times up"));
         }
+
+        let buf_size: u64 = buf.len() as u64;
+        let data_to_send = self.total_data_size - self.current_size;
+
+        if data_to_send > 0 {
+            let timer = Instant::now();
+            for idx in 0..buf_size {
+                buf[idx as usize] = 0;
+            }
+            let loop_elapsed = timer.elapsed();
+//            println!("Loop end - {:?}", ((loop_elapsed.as_secs() * 1_000) + (loop_elapsed.subsec_nanos() / 1_000_000) as u64));
+            self.current_size = self.current_size + buf_size;
+            return Ok(buf_size as usize);
+
+        } else {
+            return Ok(0 as usize);
+        }
+
+
     }
 }
 
@@ -62,6 +66,7 @@ mod test {
     use super::UploadData;
     use std::io::Read;
     use std::{time, thread};
+    use std::time::Instant;
     use rand::{thread_rng, Rng};
     use std;
 
@@ -98,14 +103,18 @@ mod test {
     #[test]
     fn test_random_ascii_generator() -> () {
         let mut generator = thread_rng();
-        let chars = generator.gen_ascii_chars().take(10);
-        let mut buf: Vec<u8> = vec![0; 10];
 
-        for (i, val) in chars.enumerate() {
-            println!("{}", val);
-            buf[i as usize] = val as u8;
+        let chars = generator.gen_ascii_chars().take(8192);
+        let mut buf: Vec<u8> = vec![0; 8192];
+
+        let timer = Instant::now();
+        for i in 0..8192 {
+            buf[i as usize] = chars.nth(i).unwrap_or('0') as u8;
         }
-        assert!(10 == buf.len() * std::mem::size_of::<u8>());
+        let el_1 = timer.elapsed();
+        let el_millis_1 = (el_1.as_secs() * 1_000) + (el_1.subsec_nanos() / 1_000_000) as u64;
+        println!("{:?}", el_millis_1);
+        assert!(8192 == buf.len() * std::mem::size_of::<u8>());
     }
 
 }
