@@ -2,9 +2,7 @@ use std::io::Read;
 use std::time::Instant;
 use std::io::Result;
 use std::io::{Error, ErrorKind};
-use rand;
-use rand::{thread_rng, Rng, AsciiGenerator};
-
+use std::cmp;
 
 pub struct UploadData {
     pub total_data_size: u64,
@@ -38,10 +36,11 @@ impl Read for UploadData {
             // Times up - so return an error..
             return Err(Error::new(ErrorKind::Other, "Error sending upload data - times up"));
         }
+        // Always chunk by 8K or less
         let const_buf_size_8kb: u64 = 8 * 1024;
-        let buf_size = buf.len() as u64;
+        let mut buf_size = buf.len() as u64;
+        buf_size = cmp::min(buf_size, const_buf_size_8kb);
         let chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz".chars().cycle();
-
         let data_to_send = self.total_data_size - self.current_size;
 
         if data_to_send > 0 {
@@ -102,20 +101,49 @@ mod test {
     }
 
     #[test]
-    fn test_random_ascii_generator() -> () {
-        let mut generator = thread_rng();
-
-        let chars = generator.gen_ascii_chars().take(8192);
-        let mut buf: Vec<u8> = vec![0; 8192];
-
-        let timer = Instant::now();
-        for i in 0..8192 {
-            buf[i as usize] = chars.nth(i).unwrap_or('0') as u8;
+    fn test_smaller_buff_read_data() -> () {
+        let total_data = 8192 * 4; // 32KB
+        let mut buffered = UploadData::new(total_data, 1);
+        for i in 0..32 {
+            let mut data_read: Vec<u8> = vec![1; 1024];
+            let read_response = buffered.read(&mut data_read);
+            match read_response {
+                Ok(_)   => {println!("Read data fine")},
+                Err(e)  => {
+                    println!("Timed out");
+                    break;
+                }
+            }
         }
-        let el_1 = timer.elapsed();
-        let el_millis_1 = (el_1.as_secs() * 1_000) + (el_1.subsec_nanos() / 1_000_000) as u64;
-        println!("{:?}", el_millis_1);
-        assert!(8192 == buf.len() * std::mem::size_of::<u8>());
+        assert!(buffered.current_size == total_data);
+    }
+
+    #[test]
+    fn test_bigger_buff_read_data() -> () {
+        let total_data = 8192 * 4; // 32KB
+        let mut buffered = UploadData::new(total_data, 1);
+        let mut num_cycles = 0;
+        loop {
+            // Try reading 32K in one go - but still only 8K is read each time
+            let mut data_read: Vec<u8> = vec![1; total_data as usize];
+            let read_response = buffered.read(&mut data_read);
+            match read_response {
+                Ok(_)   => {
+                    println!("Read data fine");
+                    num_cycles = num_cycles + 1;
+                    if buffered.current_size == total_data {
+                        break;
+                    }
+                },
+                Err(e)  => {
+                    println!("Timed out");
+                    break;
+                }
+            }
+        }
+        println!("Num cycles {:?}", num_cycles);
+        assert!(buffered.current_size == total_data);
+        assert!(4 == num_cycles);
     }
 
 }
