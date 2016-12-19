@@ -258,12 +258,13 @@ fn perform_download_test(server_url_str: &str, dimensions: &Vec<u64>) -> (u64, u
 fn perform_upload_test(server_url_str: &str,
                        client_conf: &config::UploadConfig,
                        sizes: &Vec<u64>) -> (u64, u64, f64) {
+    io::stdout().flush().ok().expect("");
     let mut thread_handles = vec![];
     let start = time::Instant::now();
     let ratio = client_conf.ratio;
     let max_chunk_count = client_conf.maxchunkcount;
     let size_max = (ratio - 1) as usize;
-    let upload_sizes: Vec<&u64> = sizes.into_iter().skip(size_max).collect();
+    let upload_sizes = sizes.into_iter().skip(size_max);
     let upload_count = ((max_chunk_count * 2) / upload_sizes.len() as u64) as u64;
     let upload_threads = client_conf.threads;
     let upload_length = client_conf.testlength;
@@ -293,7 +294,7 @@ fn perform_upload_test(server_url_str: &str,
             let mut headers = Headers::new();
             headers.set(UserAgent("Hyper-speedtest".to_owned()));
 
-            let mut buffered = upload_data::UploadData::new(full_size, 10);
+            let mut buffered = upload_data::UploadData::new(full_size, upload_length);
             {
                 let mut response = client.post(upload_url.as_str())
                                     //.body(Body::BufBody(&buff, full_size as usize))

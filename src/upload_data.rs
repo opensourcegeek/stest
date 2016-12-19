@@ -38,16 +38,18 @@ impl Read for UploadData {
             // Times up - so return an error..
             return Err(Error::new(ErrorKind::Other, "Error sending upload data - times up"));
         }
+        let const_buf_size_8kb: u64 = 8 * 1024;
+        let buf_size = buf.len() as u64;
+        let chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz".chars().cycle();
 
-        let buf_size: u64 = buf.len() as u64;
         let data_to_send = self.total_data_size - self.current_size;
 
         if data_to_send > 0 {
-            let timer = Instant::now();
-            for idx in 0..buf_size {
-                buf[idx as usize] = 0;
+//            let timer = Instant::now();
+            for (idx, val) in chars.take(buf_size as usize).enumerate() {
+                buf[idx as usize] = val as u8;
             }
-            let loop_elapsed = timer.elapsed();
+//            let loop_elapsed = timer.elapsed();
 //            println!("Loop end - {:?}", ((loop_elapsed.as_secs() * 1_000) + (loop_elapsed.subsec_nanos() / 1_000_000) as u64));
             self.current_size = self.current_size + buf_size;
             return Ok(buf_size as usize);
@@ -55,7 +57,6 @@ impl Read for UploadData {
         } else {
             return Ok(0 as usize);
         }
-
 
     }
 }
