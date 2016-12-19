@@ -104,11 +104,18 @@ mod test {
     fn test_smaller_buff_read_data() -> () {
         let total_data = 8192 * 4; // 32KB
         let mut buffered = UploadData::new(total_data, 1);
-        for i in 0..32 {
+        let mut num_cycles = 0;
+        loop {
             let mut data_read: Vec<u8> = vec![1; 1024];
             let read_response = buffered.read(&mut data_read);
             match read_response {
-                Ok(_)   => {println!("Read data fine")},
+                Ok(_)   => {
+                    println!("Read data fine");
+                    num_cycles = num_cycles + 1;
+                    if buffered.current_size == total_data {
+                        break;
+                    }
+                },
                 Err(e)  => {
                     println!("Timed out");
                     break;
@@ -116,6 +123,7 @@ mod test {
             }
         }
         assert!(buffered.current_size == total_data);
+        assert!(num_cycles == 32);
     }
 
     #[test]
