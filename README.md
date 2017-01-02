@@ -4,7 +4,6 @@ speedtest (stest)
 
 This is a port of [speedtest-cli](https://github.com/sivel/speedtest-cli) into rust, to avoid having runtime dependencies. Currently not all the arguments are supported. I'd like to add support for most platforms but targeting only linux for now. Ideally it will be a single stand alone binary that will work out of the box.
 
-![Speed test gif](https://github.com/opensourcegeek/stest/raw/master/stest-i686.gif)
 
 
 Download
