@@ -51,10 +51,10 @@ impl Read for UploadData {
 //            let loop_elapsed = timer.elapsed();
 //            println!("Loop end - {:?}", ((loop_elapsed.as_secs() * 1_000) + (loop_elapsed.subsec_nanos() / 1_000_000) as u64));
             self.current_size = self.current_size + buf_size;
-            return Ok(buf_size as usize);
+            Ok(buf_size as usize)
 
         } else {
-            return Ok(0 as usize);
+            Ok(0 as usize)
         }
 
     }

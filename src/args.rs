@@ -1,10 +1,10 @@
 
-use clap::{Arg, App, ArgMatches, SubCommand, ArgGroup};
-use clap::*;
+use clap::{Arg, App, ArgMatches, ArgGroup};
+//use clap::*;
 
 
 pub fn parse_args<'a>() -> ArgMatches<'a> {
-    let matches = App::new("stest (speedtest cli)")
+    App::new("stest (speedtest cli)")
         .version(crate_version!())
         .author(crate_authors!())
         .about("A command line utility to run speedtest similar to http://speedtest.net")
@@ -36,7 +36,6 @@ pub fn parse_args<'a>() -> ArgMatches<'a> {
         //                    .long("list")
         //                    .value_name("list")
         //                    .help("prints all servers")))
-        .get_matches();
-    matches
+        .get_matches()
 }
 

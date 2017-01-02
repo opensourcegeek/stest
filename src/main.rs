@@ -3,6 +3,7 @@ extern crate xml;
 extern crate url;
 extern crate time as ext_time;
 extern crate csv;
+#[macro_use]
 extern crate clap;
 extern crate chrono;
 extern crate rand;
@@ -14,11 +15,12 @@ mod config;
 mod upload_data;
 
 use std::io::Read;
+use std::io::Write;
 use std::collections::{HashMap, BTreeMap};
 use std::thread;
 use std::time;
 use std::time::Instant;
-use std::io::prelude::*;
+//use std::io::prelude::*;
 use std::io;
 use std::fs::File;
 
@@ -85,11 +87,9 @@ fn pick_closest_servers(client_location: (f32, f32),
 
 
 fn find_ignore_ids(ids_str: String) -> Vec<u64> {
-    let ignored_ids = ids_str.split(",").map(|x| {
+    ids_str.split(",").map(|x| {
         x.parse::<u64>().unwrap()
-    }).collect();
-
-    ignored_ids
+    }).collect()
 }
 
 
@@ -153,8 +153,7 @@ fn find_best_server_by_ping(test_servers: &Vec<TestServerConfig>)
 
 fn compute_speed_in_mbps(total_bytes: u64, total_time_in_millis: u64) -> f64 {
     let speed = (total_bytes as f64 * 8.0) / (total_time_in_millis as f64 / 1000.0);
-    let speed_in_mbps = speed / (1000.0 * 1000.0);
-    speed_in_mbps
+    speed / (1000.0 * 1000.0)
 }
 
 
@@ -220,14 +219,14 @@ fn perform_download_test(server_url_str: &str, dimensions: &Vec<u64>) -> (u64, u
                         print!(".");
                         io::stdout().flush().ok().expect("");
 //                        io::stdout().write_all("\x1b[1K".as_bytes()).unwrap();
-                        return read_bytes;
+                        read_bytes
 
                     } else {
-                        return 0 as u64;
+                        0 as u64
                     }
                 }
                 Err(res)    => {
-                    return 0 as u64;
+                    0 as u64
                 }
             }
 
@@ -388,7 +387,7 @@ fn run_test(number_of_tests: u64, file_name: Option<&str>,
             test_servers
         },
         None        => {
-            let servers = match server_country_code {
+            match server_country_code {
                 Some(scc) => {
                     test_servers.retain(|ref mut server| {
                         // If not ignore ids list keep this server
@@ -412,8 +411,7 @@ fn run_test(number_of_tests: u64, file_name: Option<&str>,
                     pick_closest_servers(client_location, &test_servers, &mut closest_servers);
                     closest_servers
                 }
-            };
-            servers
+            }
         }
     };
 
@@ -502,13 +500,10 @@ fn main() {
 
     let mut n_tests: u64 = 1;
 
-    match number_of_tests {
-        Some(n)     => {
-            // Any non-numerical number of tests will default to 1 test
-            let num_tests: u64 = n.parse::<u64>().unwrap_or(1);
-            n_tests = num_tests;
-        },
-        None        => {}
+    if let Some(n) = number_of_tests {
+        // Any non-numerical number of tests will default to 1 test
+        let num_tests: u64 = n.parse::<u64>().unwrap_or(1);
+        n_tests = num_tests;
     }
 
     println!("Number of tests to run {}", n_tests);
