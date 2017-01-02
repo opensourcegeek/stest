@@ -90,7 +90,6 @@ branches:
     # release tags
     - /^v\d+\.\d+\.\d+.*$/
     - master
-    - 0.6.0
 
 notifications:
   email:
