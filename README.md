@@ -1,6 +1,8 @@
 speedtest (stest)
 =================
 
+[![Build Status](https://travis-ci.org/opensourcegeek/stest.svg?branch=master)](https://travis-ci.org/opensourcegeek/stest) [![Build status](https://ci.appveyor.com/api/projects/status/e86ogv74rvs70529?svg=true)](https://ci.appveyor.com/project/opensourcegeek/stest)
+
 
 This is a port of [speedtest-cli](https://github.com/sivel/speedtest-cli) into rust, to avoid having runtime dependencies. Currently not all the arguments are supported. I'd like to add support for most platforms but targeting only linux for now. Ideally it will be a single stand alone binary that will work out of the box.
 
