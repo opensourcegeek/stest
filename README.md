@@ -11,7 +11,7 @@ This is a port of [speedtest-cli](https://github.com/sivel/speedtest-cli) into r
 Download
 --------
 
-Download the binaries 'stest-i686-linux' for 32-bit or 'stest-x86_64-linux' for 64-bit linux from [releases](https://github.com/opensourcegeek/stest/releases) for most recent version. These are the only supported platforms for the moment.
+Download the binaries from [releases](https://github.com/opensourcegeek/stest/releases) page. I've added support to more platforms, if you encounter any problems please raise an issue (mind you it's not reached 1.0 yet).
 
 
 Usage
