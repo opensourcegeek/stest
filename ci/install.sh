@@ -16,7 +16,7 @@ main() {
     curl -LSfs https://japaric.github.io/trust/install.sh | \
         sh -s -- \
            --force \
-           --git opensourcegeek/cross \
+           --git japaric/cross \
            --tag v0.1.4 \
            --target $target
 }
