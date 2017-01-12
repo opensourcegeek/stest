@@ -61,7 +61,7 @@ deploy:
   # - Encrypt it. Go to https://ci.appveyor.com/tools/encrypt
   # - Paste the output down here
   auth_token:
-    secure: r4wwqb6w8ERXYFbwRbwsPIyjYr9u/h0mLSkwae5oU1QD8LpmHhCLIxslhU4hJCmi
+    secure: HS1zA0krdl/iW4/BxtIBJOZyhcLo9gF7VUMcA1nOcJHOQnsbs51fQ992zA+OiBz6
   description: ''
   on:
     # TODO This is the channel that will be used to produce binary releases
