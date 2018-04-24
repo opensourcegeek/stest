@@ -463,6 +463,13 @@ fn parse_test_server_xml<T: Read>(res: T) -> Vec<TestServerConfig> {
 }
 
 
+pub fn find_ignore_ids(ids_str: String) -> Vec<u64> {
+    ids_str.split(",").map(|x| {
+        x.parse::<u64>().unwrap()
+    }).collect()
+}
+
+
 const CACHED_XML_CONTENT: &'static str = r#"
 <?xml version="1.0" encoding="UTF-8"?>
 <settings>

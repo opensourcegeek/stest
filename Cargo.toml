@@ -1,10 +1,7 @@
 [package]
 name = "stest"
-version = "0.6.10"
+version = "0.7.0"
 authors = ["opensourcegeek <3.pravin@gmail.com>"]
-
-[features]
-ssl = ["hyper/ssl"]
 
 [dependencies]
 xml-rs = "0.3"
@@ -18,6 +15,13 @@ rand = "0.3"
 git = "https://github.com/servo/rust-url"
 
 [dependencies.hyper]
-version = "0.9"
+version = "0.10"
 default-features = false
 
+[lib]
+name = "stest_lib"
+path = "src/lib.rs"
+
+[[bin]]
+name = "stest"
+path = "src/main.rs"
