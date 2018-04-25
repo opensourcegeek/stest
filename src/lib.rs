@@ -82,9 +82,10 @@ pub fn pick_closest_servers(client_location: (f32, f32),
 
 }
 
+type Latency = u64;
 
 pub fn find_best_server_by_ping(test_servers: &Vec<TestServerConfig>)
-                            -> &TestServerConfig {
+                            -> (&TestServerConfig, Latency) {
     let mut server_responses: BTreeMap<u64, &TestServerConfig> = BTreeMap::new();
 
     for s in test_servers {
@@ -137,7 +138,7 @@ pub fn find_best_server_by_ping(test_servers: &Vec<TestServerConfig>)
 
     let (latency, best_server) = server_responses.iter().next().unwrap();
     println!("The chosen server is {:?} with HTTP 'ping' latency {:?}ms", best_server.name, latency);
-    best_server
+    (best_server, *latency)
 }
 
 

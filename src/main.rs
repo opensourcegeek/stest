@@ -105,7 +105,7 @@ fn run_test(number_of_tests: u64, file_name: Option<&str>,
     if closest_servers.len() > 0 {
         // TODO: May be change the server for each test?
         // look for ping latency for all servers (or closest servers)
-        let best_server = find_best_server_by_ping(&closest_servers);
+        let (best_server, _) = find_best_server_by_ping(&closest_servers);
         let mut records = Vec::new();
 
         let mut col_names = Vec::new();
