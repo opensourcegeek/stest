@@ -2,6 +2,7 @@ use std::io::Read;
 use std::io::Cursor;
 use std::error::Error;
 use std::collections::HashMap;
+use std::time;
 
 use xml::reader::{EventReader, XmlEvent};
 use xml::attribute::OwnedAttribute;
@@ -11,6 +12,7 @@ use hyper::client::response::Response;
 use hyper::client::RedirectPolicy;
 use hyper::client::Body;
 use hyper::header::{Headers, UserAgent, Header, ContentLength};
+use hyper_timeout_connector::HttpTimeoutConnector;
 
 pub trait GenerateConfig<T> {
     fn from_xml(&Vec<OwnedAttribute>) -> T;
@@ -28,7 +30,13 @@ pub struct FullConfig {
 impl FullConfig {
     pub fn new() -> FullConfig {
         let url = "http://www.speedtest.net/speedtest-config.php";
-        let mut client = Client::new();
+        let mut connector = HttpTimeoutConnector::new();
+        connector.set_connect_timeout(Some(time::Duration::from_secs(30)));
+
+        let mut client = Client::with_connector(connector);
+        client.set_read_timeout(Some(time::Duration::from_secs(10)));
+        client.set_write_timeout(Some(time::Duration::from_secs(10)));
+
         client.set_redirect_policy(RedirectPolicy::FollowAll);
         let mut headers = Headers::new();
         headers.set(UserAgent("Hyper-speedtest".to_owned()));
@@ -345,7 +353,12 @@ pub fn get_all_test_servers_from_server() -> Vec<TestServerConfig> {
     let mut all_test_servers: Vec<TestServerConfig> = Vec::new();
 
     for url in urls {
-        let mut client = Client::new();
+        let mut connector = HttpTimeoutConnector::new();
+        connector.set_connect_timeout(Some(time::Duration::from_secs(30)));
+
+        let mut client = Client::with_connector(connector);
+        client.set_read_timeout(Some(time::Duration::from_secs(10)));
+        client.set_write_timeout(Some(time::Duration::from_secs(10)));
         client.set_redirect_policy(RedirectPolicy::FollowAll);
 
         let mut headers = Headers::new();
@@ -465,7 +478,7 @@ fn parse_test_server_xml<T: Read>(res: T) -> Vec<TestServerConfig> {
 
 pub fn find_ignore_ids(ids_str: String) -> Vec<u64> {
     ids_str.split(",").map(|x| {
-        x.parse::<u64>().unwrap()
+        x.parse::<u64>().unwrap_or(0)
     }).collect()
 }
 

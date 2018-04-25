@@ -26,12 +26,14 @@ fn run_test(number_of_tests: u64, file_name: Option<&str>,
     // glitch on the server side as similar content-length:0 responses come back when queried
     // using curl as well. To work around it we retry upto MAX_NUM_RETRIES, it should come in
     // via passed in args as well.
-    let current_count = 0;
+    let mut current_count = 0;
     let mut config = config::FullConfig::new();
 
     while !config.parsing_succeeded && current_count <= MAX_NUM_RETRIES {
+        println!("Retrying...");
         config = config::FullConfig::new();
         thread::sleep(time::Duration::from_millis(ONE_SEC_IN_MILLIS));
+        current_count += 1;
     }
 
 //    println!("{:?}", config);

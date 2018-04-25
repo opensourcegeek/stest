@@ -7,6 +7,7 @@ extern crate csv;
 extern crate clap;
 extern crate chrono;
 extern crate rand;
+extern crate hyper_timeout_connector;
 
 pub mod file_utils;
 pub mod geo;
@@ -33,6 +34,7 @@ use hyper::header::{Headers, UserAgent, Header, ContentLength};
 use xml::reader::{EventReader, XmlEvent};
 use xml::attribute::OwnedAttribute;
 use url::{Url, Host};
+use hyper_timeout_connector::HttpTimeoutConnector;
 
 use config::TestServerConfig;
 use utils::compute_speed_in_mbps;
@@ -100,7 +102,13 @@ pub fn find_best_server_by_ping(test_servers: &Vec<TestServerConfig>)
 
         for i in 0..3 {
             let start = Instant::now();
-            let mut client = Client::new();
+            let mut connector = HttpTimeoutConnector::new();
+            connector.set_connect_timeout(Some(time::Duration::from_secs(30)));
+
+            let mut client = Client::with_connector(connector);
+            client.set_read_timeout(Some(time::Duration::from_secs(10)));
+            client.set_write_timeout(Some(time::Duration::from_secs(10)));
+
             client.set_redirect_policy(RedirectPolicy::FollowAll);
             let mut headers = Headers::new();
             headers.set(UserAgent("Hyper-speedtest".to_owned()));
@@ -162,7 +170,13 @@ pub fn perform_download_test(server_url_str: &str, dimensions: &Vec<u64>) -> (u6
 
     for url in urls {
         let handle = thread::spawn(move || {
-            let mut client = Client::new();
+            let mut connector = HttpTimeoutConnector::new();
+            connector.set_connect_timeout(Some(time::Duration::from_secs(30)));
+
+            let mut client = Client::with_connector(connector);
+            client.set_read_timeout(Some(time::Duration::from_secs(10)));
+            client.set_write_timeout(Some(time::Duration::from_secs(10)));
+
             client.set_redirect_policy(RedirectPolicy::FollowAll);
 
             let mut headers = Headers::new();
@@ -271,8 +285,12 @@ pub fn perform_upload_test(server_url_str: &str,
         let handle = thread::spawn(move || {
             let mut total_bytes_uploaded = 0;
 
-            let mut client = Client::new();
+            let mut connector = HttpTimeoutConnector::new();
+            connector.set_connect_timeout(Some(time::Duration::from_secs(30)));
+
+            let mut client = Client::with_connector(connector);
             client.set_redirect_policy(RedirectPolicy::FollowAll);
+            client.set_read_timeout(Some(time::Duration::from_secs(5)));
             client.set_write_timeout(Some(time::Duration::from_secs(5)));
 
             let mut headers = Headers::new();
