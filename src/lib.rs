@@ -263,7 +263,14 @@ pub fn perform_upload_test(server_url_str: &str,
     let max_chunk_count = client_conf.maxchunkcount;
     let size_max = (ratio - 1) as usize;
     let upload_sizes = sizes.into_iter().skip(size_max);
-    let upload_count = ((max_chunk_count * 2) / upload_sizes.len() as u64) as u64;
+
+    let upload_count = if upload_sizes.len() == 0 {
+        1_u64
+
+    } else {
+        ((max_chunk_count * 2) / upload_sizes.len() as u64) as u64
+    };
+
     let upload_threads = client_conf.threads;
     let upload_length = client_conf.testlength;
 
@@ -275,8 +282,6 @@ pub fn perform_upload_test(server_url_str: &str,
     }
 
     let picked_sizes = all_sizes.into_iter().take(max_chunk_count as usize);
-
-//    println!("{:?}", upload_sizes);
 
     for s in picked_sizes {
         let full_size = s.clone();
